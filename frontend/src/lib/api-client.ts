@@ -71,7 +71,8 @@ export const tokenStorage = {
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 const API_PREFIX = `${BASE_URL}/api/v1`;
-const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true' || true; // Mock mode fallback enables seamless standalone preview
+const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
+const FALLBACK_TO_MOCKS = import.meta.env.VITE_FALLBACK_TO_MOCKS === 'true';
 
 // Local Storage synced Mock Database for rich interactivity in mock mode
 class MockDatabase {
@@ -184,7 +185,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
           });
 
           if (!refreshRes.ok) throw new Error('Refresh failed');
-          const refreshData: AuthResponse = await refreshRes.json();
+          const refreshData = normalizeAuthResponse(await refreshRes.json());
           tokenStorage.setAccessToken(refreshData.access_token);
           isRefreshing = false;
           onRefreshed(refreshData.access_token);
@@ -217,7 +218,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     return handleResponse<T>(response);
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    // Network fallback to mock if connection fails
+    if (!FALLBACK_TO_MOCKS) {
+      throw new ApiError('Could not connect to the backend API.', 'NETWORK_ERROR', 0);
+    }
     return handleMockRequest<T>(endpoint, options);
   }
 }
@@ -245,6 +248,218 @@ async function handleResponse<T>(response: Response): Promise<T> {
     return (await response.json()) as T;
   }
   return (await response.text()) as unknown as T;
+}
+
+function normalizeUser(raw: any): User {
+  return {
+    id: String(raw.id),
+    email: raw.email,
+    name: raw.name,
+    avatar_url: raw.avatar_url,
+    role: raw.role || 'admin',
+    workspace_id: raw.workspace_id || 'local_workspace',
+    created_at: raw.created_at || new Date().toISOString(),
+  };
+}
+
+function normalizeAuthResponse(raw: any): AuthResponse {
+  const access = raw.access_token || raw.tokens?.access_token;
+  const refresh = raw.refresh_token || raw.tokens?.refresh_token;
+  const normalized: AuthResponse = {
+    access_token: access,
+    token_type: 'Bearer',
+    expires_in: raw.expires_in,
+    user: normalizeUser(raw.user),
+  };
+  tokenStorage.setAccessToken(access);
+  tokenStorage.setRefreshToken(refresh || null);
+  return normalized;
+}
+
+const backendToFrontendTool: Record<string, string> = {
+  datetime: 'date_time',
+  gmail_summary: 'gmail_read',
+  send_slack_message: 'slack_notify',
+  github_issue_search: 'github_api',
+};
+
+const frontendToBackendTool: Record<string, string> = {
+  date_time: 'datetime',
+  gmail_read: 'gmail_summary',
+  slack_notify: 'send_slack_message',
+  github_api: 'github_issue_search',
+  parse_job_requirements: 'summarize_text',
+  save_report: 'save_memory',
+};
+
+function normalizeToolNameForFrontend(toolName: string): string {
+  return backendToFrontendTool[toolName] || toolName;
+}
+
+function normalizeToolNameForBackend(toolName: string): string {
+  return frontendToBackendTool[toolName] || toolName;
+}
+
+function normalizeAgent(raw: any): Agent {
+  const tools = (raw.tools || raw.enabled_tools || []).map(normalizeToolNameForFrontend);
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    objective: raw.objective,
+    instructions: raw.instructions,
+    model: raw.model || 'gemini-2.5-flash',
+    temperature: raw.temperature ?? 0.2,
+    tools,
+    version: raw.version || 'v1.0',
+    status: raw.status || 'active',
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+  };
+}
+
+function toBackendAgentPayload(input: AgentCreateInput | AgentUpdateInput): Record<string, unknown> {
+  return {
+    name: input.name,
+    objective: input.objective,
+    instructions: input.instructions,
+    enabled_tools: input.tools?.map(normalizeToolNameForBackend),
+  };
+}
+
+function normalizeConversation(raw: any): Conversation {
+  return {
+    id: String(raw.id),
+    agent_id: String(raw.agent_id),
+    title: raw.title || 'New Conversation',
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+  };
+}
+
+function normalizeToolCalls(rawToolCalls: any): ToolCallPayload[] | null {
+  if (!rawToolCalls) return null;
+  const rawCalls = Array.isArray(rawToolCalls) ? rawToolCalls : [rawToolCalls];
+  return rawCalls.map((call, index) => ({
+    id: String(call.id || `tool_${index}_${Date.now()}`),
+    tool_name: call.tool_name || call.name || 'tool',
+    input: call.input || {},
+    output: call.output,
+    status: call.status || 'succeeded',
+    duration_ms: call.duration_ms,
+    error: call.error,
+  }));
+}
+
+function normalizeMessage(raw: any): Message {
+  return {
+    id: String(raw.id),
+    conversation_id: String(raw.conversation_id),
+    role: raw.role,
+    content: raw.content,
+    tool_calls: normalizeToolCalls(raw.tool_calls),
+    created_at: raw.created_at,
+  };
+}
+
+function normalizeConversationDetail(raw: any): Conversation & { messages: Message[] } {
+  return {
+    ...normalizeConversation(raw),
+    messages: (raw.messages || []).map(normalizeMessage),
+  };
+}
+
+function normalizeRoutine(raw: any): Routine {
+  return {
+    id: String(raw.id),
+    agent_id: String(raw.agent_id),
+    name: raw.name,
+    prompt: raw.prompt,
+    schedule: raw.schedule,
+    timezone: raw.timezone || 'UTC',
+    is_active: Boolean(raw.is_active),
+    last_run_at: raw.last_run_at ?? null,
+    last_run_status: raw.last_run_status ?? null,
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+  };
+}
+
+function normalizeRoutineRun(raw: any): RoutineRun {
+  return {
+    id: String(raw.id),
+    routine_id: String(raw.routine_id),
+    agent_id: String(raw.agent_id),
+    status: raw.status,
+    trigger: raw.trigger || 'manual',
+    output: raw.output,
+    error: raw.error,
+    duration: raw.duration || calculateDuration(raw.started_at, raw.finished_at),
+    started_at: raw.started_at,
+    finished_at: raw.finished_at,
+    tools_executed: raw.tools_executed || inferToolsFromOutput(raw.output),
+  };
+}
+
+function calculateDuration(startedAt?: string, finishedAt?: string | null): string | undefined {
+  if (!startedAt || !finishedAt) return undefined;
+  const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return undefined;
+  return `${Math.max(1, Math.round(ms / 1000))}s`;
+}
+
+function inferToolsFromOutput(output?: string | null): string[] {
+  if (!output) return [];
+  const tools = ['datetime', 'web_search', 'gmail_summary', 'draft_message'].filter((tool) =>
+    output.toLowerCase().includes(tool)
+  );
+  return tools.length > 0 ? tools : ['agent_loop'];
+}
+
+function normalizeDashboardSummary(raw: any): DashboardSummary {
+  const totalRuns = raw.total_routine_runs_count ?? 0;
+  const failedRuns = raw.failed_routine_runs_count ?? 0;
+  const succeededRuns = raw.succeeded_routine_runs_count ?? 0;
+  const successRate = totalRuns > 0 ? Math.round((succeededRuns / totalRuns) * 1000) / 10 : 100;
+  return {
+    active_agents_count: raw.active_agents_count ?? raw.agents_count ?? 0,
+    healthy_agents_count: raw.healthy_agents_count ?? raw.agents_count ?? 0,
+    active_routines_count: raw.active_routines_count ?? 0,
+    next_routine_in_minutes: raw.next_routine_in_minutes ?? 0,
+    runs_this_week_count: raw.runs_this_week_count ?? totalRuns,
+    success_rate_percentage: raw.success_rate_percentage ?? successRate,
+    failed_runs_count: raw.failed_runs_count ?? failedRuns,
+    runs_trend_data: raw.runs_trend_data || [],
+  };
+}
+
+function normalizeActionItem(raw: any): ActionItem {
+  const requiresConfirmation = Boolean(raw.requires_confirmation);
+  return {
+    id: String(raw.id),
+    title: raw.title || `${raw.tool_name || 'Action'} needs attention`,
+    description: raw.description || raw.title || 'Review this item before continuing.',
+    level: requiresConfirmation ? 'warning' : raw.status === 'failed' ? 'error' : 'info',
+    badge_text: raw.status || raw.tool_name,
+    action_label: requiresConfirmation ? 'Review' : undefined,
+    secondary_action_label: 'Dismiss',
+    created_at: raw.created_at || new Date().toISOString(),
+  };
+}
+
+function normalizeIntegration(raw: any): Integration {
+  const connected = raw.connected || raw.status === 'connected';
+  return {
+    id: raw.id || raw.provider || 'gmail',
+    name: raw.name || `${String(raw.provider || 'gmail').toUpperCase()} Integration`,
+    provider: raw.provider || 'gmail',
+    description: raw.description || raw.message || 'External integration status.',
+    status: connected ? 'connected' : raw.configured ? 'disconnected' : 'disconnected',
+    scopes: raw.scopes || [],
+    icon: raw.icon || raw.provider || 'gmail',
+    account_email: raw.account_email,
+    last_synced_at: raw.last_synced_at,
+    expires_at: raw.expires_at,
+  };
 }
 
 // Mock Request Handler
@@ -544,16 +759,24 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
 export const api = {
   // Auth
   login: (credentials: { email: string; password?: string }) =>
-    request<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+    request<unknown>('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }).then(normalizeAuthResponse),
   register: (data: { name: string; email: string; password?: string }) =>
-    request<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
-  getMe: () => request<User>('/auth/me'),
+    request<unknown>('/auth/register', { method: 'POST', body: JSON.stringify(data) }).then(normalizeAuthResponse),
+  getMe: () => request<unknown>('/auth/me').then(normalizeUser),
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
 
   // Dashboard
-  getDashboardSummary: () => request<DashboardSummary>('/dashboard/summary'),
-  getRecentRuns: () => request<RoutineRun[]>('/dashboard/recent-runs'),
-  getActionItems: () => request<ActionItem[]>('/dashboard/action-items'),
+  getDashboardSummary: (): Promise<DashboardSummary> => request<unknown>('/dashboard/summary').then(normalizeDashboardSummary),
+  getRecentRuns: (): Promise<RoutineRun[]> =>
+    request<any>('/dashboard/recent-runs').then((raw) => {
+      const runs = (Array.isArray(raw) ? raw : raw.runs || []).map(normalizeRoutineRun);
+      mockDb.runs = runs;
+      return runs;
+    }),
+  getActionItems: (): Promise<ActionItem[]> =>
+    request<any>('/dashboard/action-items').then((raw) =>
+      (Array.isArray(raw) ? raw : raw.action_items || []).map(normalizeActionItem)
+    ),
   dismissActionItem: (id: string) => {
     mockDb.actionItems = mockDb.actionItems.filter((item) => item.id !== id);
     mockDb.save();
@@ -561,46 +784,63 @@ export const api = {
   },
 
   // Agents
-  getAgents: () => request<Agent[]>('/agents'),
-  getAgent: (id: string) => request<Agent>(`/agents/${id}`),
+  getAgents: (): Promise<Agent[]> =>
+    request<any>('/agents').then((raw) => {
+      const agents = (Array.isArray(raw) ? raw : raw.agents || []).map(normalizeAgent);
+      mockDb.agents = agents;
+      return agents;
+    }),
+  getAgent: (id: string): Promise<Agent> => request<unknown>(`/agents/${id}`).then(normalizeAgent),
   createAgent: (input: AgentCreateInput) =>
-    request<Agent>('/agents', { method: 'POST', body: JSON.stringify(input) }),
+    request<unknown>('/agents', { method: 'POST', body: JSON.stringify(toBackendAgentPayload(input)) }).then(normalizeAgent),
   updateAgent: (id: string, input: AgentUpdateInput) =>
-    request<Agent>(`/agents/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+    request<unknown>(`/agents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(toBackendAgentPayload(input)),
+    }).then(normalizeAgent),
   deleteAgent: (id: string) =>
     request<{ success: boolean }>(`/agents/${id}`, { method: 'DELETE' }),
 
   // Conversations & Chat
-  getConversations: (agentId?: string) =>
+  getConversations: (agentId?: string): Promise<Conversation[]> =>
     agentId
-      ? request<Conversation[]>(`/agents/${agentId}/conversations`)
+      ? request<any>(`/agents/${agentId}/conversations`).then((raw) =>
+          (Array.isArray(raw) ? raw : raw.conversations || []).map(normalizeConversation)
+        )
       : request<Conversation[]>('/conversations'),
   createConversation: (agentId: string, title?: string) =>
-    request<Conversation>(`/agents/${agentId}/conversations`, {
+    request<unknown>(`/agents/${agentId}/conversations`, {
       method: 'POST',
       body: JSON.stringify({ title }),
-    }),
-  getConversation: (conversationId: string) =>
-    request<Conversation & { messages: Message[] }>(`/conversations/${conversationId}`),
+    }).then(normalizeConversation),
+  getConversation: (conversationId: string): Promise<Conversation & { messages: Message[] }> =>
+    request<unknown>(`/conversations/${conversationId}`).then(normalizeConversationDetail),
   sendMessage: (conversationId: string, content: string) =>
-    request<Message>(`/conversations/${conversationId}/messages`, {
+    request<any>(`/conversations/${conversationId}/runs`, {
       method: 'POST',
       body: JSON.stringify({ content }),
-    }),
+    }).then((raw) => normalizeMessage(raw.assistant_message || raw)),
 
   // Routines
-  getRoutines: () => request<Routine[]>('/routines'),
-  getRoutine: (id: string) => request<Routine>(`/routines/${id}`),
+  getRoutines: (): Promise<Routine[]> =>
+    request<any>('/routines').then((raw) => {
+      const routines = (Array.isArray(raw) ? raw : raw.routines || []).map(normalizeRoutine);
+      mockDb.routines = routines;
+      return routines;
+    }),
+  getRoutine: (id: string): Promise<Routine> => request<unknown>(`/routines/${id}`).then(normalizeRoutine),
   createRoutine: (input: RoutineCreateInput) =>
-    request<Routine>('/routines', { method: 'POST', body: JSON.stringify(input) }),
+    request<unknown>('/routines', { method: 'POST', body: JSON.stringify(input) }).then(normalizeRoutine),
   updateRoutine: (id: string, input: RoutineUpdateInput) =>
-    request<Routine>(`/routines/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+    request<unknown>(`/routines/${id}`, { method: 'PATCH', body: JSON.stringify(input) }).then(normalizeRoutine),
   deleteRoutine: (id: string) =>
     request<{ success: boolean }>(`/routines/${id}`, { method: 'DELETE' }),
   triggerRoutineRun: (id: string) =>
-    request<RoutineRun>(`/routines/${id}/run`, { method: 'POST' }),
+    request<unknown>(`/routines/${id}/run`, { method: 'POST' }).then(normalizeRoutineRun),
   getRoutineRuns: (routineId: string) =>
-    request<RoutineRun[]>(`/routines/${routineId}/runs`),
+    request<any>(`/routines/${routineId}/runs`).then((raw) =>
+      (Array.isArray(raw) ? raw : raw.runs || []).map(normalizeRoutineRun)
+    ),
 
   // Tool Logs & Run Details
   getToolLogsForRun: (runId: string) => {
@@ -608,7 +848,11 @@ export const api = {
   },
 
   // Integrations
-  getIntegrations: () => request<Integration[]>('/integrations'),
+  getIntegrations: () =>
+    request<unknown>('/integrations/gmail/status').then((gmailStatus) => [
+      normalizeIntegration(gmailStatus),
+      ...initialIntegrations.filter((integration) => integration.provider !== 'gmail'),
+    ]),
   updateIntegration: (id: string, patch: Partial<Integration>) =>
     request<Integration>(`/integrations/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 };
@@ -633,7 +877,7 @@ export async function streamMessageHelper({
   onError: (err: Error) => void;
   signal?: AbortSignal;
 }) {
-  const url = `${API_PREFIX}/conversations/${conversationId}/messages`;
+  const url = `${API_PREFIX}/conversations/${conversationId}/runs`;
   const token = tokenStorage.getAccessToken();
 
   try {
@@ -717,7 +961,7 @@ The full synthesis report has been formatted and stored in the workspace registr
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ content, stream: true }),
+      body: JSON.stringify({ content }),
       signal,
     });
 
@@ -729,9 +973,21 @@ The full synthesis report has been formatted and stored in the workspace registr
     // If server returned plain JSON
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      const data: Message = await response.json();
-      onToken(data.content);
-      onComplete(data);
+      const data = await response.json();
+      const toolMessages = (data.tool_messages || []).map(normalizeMessage);
+      toolMessages.forEach((toolMessage: Message) => {
+        const toolCall = normalizeToolCalls(toolMessage.tool_calls)?.[0];
+        if (toolCall && onToolCall) {
+          onToolCall({
+            ...toolCall,
+            output: toolMessage.content,
+            status: 'succeeded',
+          });
+        }
+      });
+      const assistantMessage = normalizeMessage(data.assistant_message || data);
+      onToken(assistantMessage.content);
+      onComplete(assistantMessage);
       return;
     }
 
