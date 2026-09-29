@@ -1,182 +1,194 @@
-# AgentHub Backend
+<div align="center">
 
-AgentHub is a backend-first personal AI automation platform for an engineering student MVP. Users will be able to create agents for internship research, Gmail summaries, scheduled routines, and dashboard-ready logs.
+# AgentHub
 
-The frontend is intentionally out of scope for this repository. This backend exposes APIs that a separate frontend can consume.
+**Create AI agents that use tools, run scheduled routines, and log every action.**
 
-## Current Phase
+[Website](https://agent-hub-webiste.vercel.app/) · [API Docs](#api-overview) · [Getting Started](#getting-started) · [Architecture](#architecture)
 
-Milestones 1-12 are implemented:
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 
-- FastAPI app
-- `/api/v1` router
-- health endpoint
-- settings module
-- standard error shape
-- pytest setup
-- PostgreSQL with Docker Compose
-- SQLAlchemy async models
-- Alembic migrations
-- secure auth with register, login, refresh, logout, and current user
-- user-scoped agent CRUD
-- user-scoped conversations and message history
-- custom agent loop with deterministic local LLM wrapper and tool calling
-- agent-specific tool capabilities with a 10-tool catalog
-- routines with manual execution and run logs
-- safe Gmail summary tool and controlled scheduled actions
-- dashboard summary, recent runs, recent activity, and action item APIs
-- OpenAI SDK based LLM client for AICredits/OpenAI-compatible providers
-- Dockerfile and Docker Compose setup
-- production notes and demo script
+</div>
 
-## Local Development
+---
+
+## Overview
+
+AgentHub is a backend platform for building autonomous AI agents. Unlike a chatbot that only replies, an AgentHub agent runs a **tool-calling loop**: it reasons, calls tools, reads the results, and continues until the task is complete. Every run and tool action is stored, so users can see exactly what their agents did.
+
+This repository contains the **backend API**. The web frontend lives in a separate repository and consumes the REST API described below.
+
+## Features
+
+- **Secure authentication**: register, login, token refresh, logout, current user
+- **Custom agents**: user-scoped CRUD with per-agent instructions and objectives
+- **Conversations**: persistent message history and agent runs
+- **Custom agent loop**: written from scratch (no agent framework), with max-iteration safety
+- **Tool catalog**: 10 tools, enabled or disabled per agent
+- **Routines**: manual and scheduled execution with detailed run logs
+- **Gmail summaries**: read-only summary tool with controlled scheduled actions
+- **Dashboard APIs**: summary, recent runs, recent activity, action items
+- **Flexible LLM layer**: deterministic mock for local dev, OpenAI-compatible client for real models
+- **Consistent error format** across every endpoint
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| API | Python, FastAPI (async) |
+| Database | PostgreSQL, SQLAlchemy 2.0 (async), Alembic |
+| Validation | Pydantic v2 |
+| LLM | OpenAI SDK with AICredits or any OpenAI-compatible provider |
+| Tooling | uv, pytest |
+| Deployment | Docker, Docker Compose |
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[Client] --> B[FastAPI API]
+    B --> C[Auth dependency]
+    B --> D[Agent service]
+    D --> E[Conversation history]
+    D --> F[LLM client]
+    F --> G{Tool call?}
+    G -->|yes| H[Tool registry]
+    H --> I[Internal tools / integrations]
+    I --> D
+    G -->|no| J[Final response]
+    D --> K[(PostgreSQL)]
+    J --> B
+```
+
+Scheduled routines use the same agent service: the scheduler loads an active routine, runs the agent with the routine prompt, and stores the result as a run record.
+
+A full diagram is available in [`docs/architecture.svg`](docs/architecture.svg).
+
+## Getting Started
+
+### Prerequisites
+
+- Python (version specified in `pyproject.toml`)
+- [uv](https://docs.astral.sh/uv/)
+- Docker and Docker Compose
+
+### Run locally
 
 ```bash
+# Install dependencies
 uv sync
-copy .env.example .env
-uv run pytest
+
+# Create your environment file
+cp .env.example .env          # Windows (cmd): copy .env.example .env
+
+# Start PostgreSQL
+docker compose up -d postgres
+
+# Apply migrations
+uv run alembic upgrade head
+
+# Start the API
 uv run uvicorn app.main:app --reload
 ```
 
-Health check:
+Check that it works:
 
 ```bash
-GET http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v1/health
 ```
 
-Auth endpoints:
+Interactive docs are served at `http://localhost:8000/docs`.
 
-```text
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-POST /api/v1/auth/refresh
-POST /api/v1/auth/logout
-GET  /api/v1/auth/me
-```
-
-Agent endpoints:
-
-```text
-POST   /api/v1/agents
-GET    /api/v1/agents
-GET    /api/v1/agents/{agent_id}
-PATCH  /api/v1/agents/{agent_id}
-DELETE /api/v1/agents/{agent_id}
-```
-
-Conversation endpoints:
-
-```text
-POST /api/v1/agents/{agent_id}/conversations
-GET  /api/v1/agents/{agent_id}/conversations
-GET  /api/v1/conversations/{conversation_id}
-POST /api/v1/conversations/{conversation_id}/messages
-POST /api/v1/conversations/{conversation_id}/runs
-```
-
-Tool endpoints:
-
-```text
-GET /api/v1/tools
-GET /api/v1/agents/{agent_id}/tools
-PUT /api/v1/agents/{agent_id}/tools
-```
-
-Routine endpoints:
-
-```text
-POST   /api/v1/routines
-GET    /api/v1/routines
-GET    /api/v1/routines/{routine_id}
-PATCH  /api/v1/routines/{routine_id}
-DELETE /api/v1/routines/{routine_id}
-POST   /api/v1/routines/{routine_id}/run
-GET    /api/v1/routines/{routine_id}/runs
-```
-
-Integration endpoints:
-
-```text
-GET /api/v1/integrations/gmail/status
-```
-
-Dashboard endpoints:
-
-```text
-GET /api/v1/dashboard/summary
-GET /api/v1/dashboard/recent-runs
-GET /api/v1/dashboard/recent-activity
-GET /api/v1/dashboard/action-items
-```
-
-## Database
-
-Start PostgreSQL:
-
-```bash
-docker compose up -d postgres
-```
-
-Local connection:
-
-```text
-Host: 127.0.0.1
-Port: 5433
-Database: agenthub
-Username: agenthub
-Password: agenthub
-```
-
-Run migrations after migration files are created:
-
-```bash
-uv run alembic upgrade head
-```
-
-## Docker
-
-Run the API and PostgreSQL together:
+### Run with Docker
 
 ```bash
 docker compose up --build
 ```
 
-The API will be available at:
+### Run tests
 
-```text
-http://localhost:8000/api/v1/health
+```bash
+uv run pytest
 ```
 
-## LLM Provider
+## Configuration
 
-Local development defaults to the deterministic mock LLM:
+Copy `.env.example` to `.env`. Never commit your `.env` file.
 
-```text
+**Local database defaults** (development only, use strong secrets in any deployment):
+
+| Setting | Value |
+|---|---|
+| Host | `127.0.0.1` |
+| Port | `5433` |
+| Database | `agenthub` |
+| User / Password | `agenthub` / `agenthub` |
+
+**LLM provider.** The default is a deterministic mock, so the app runs with no API key:
+
+```env
 LLM_PROVIDER=mock
 ```
 
-For real model calls through AICredits or another OpenAI-compatible provider:
+For real models:
 
-```text
+```env
 LLM_PROVIDER=aicredits
 AICREDITS_BASE_URL=<provider-base-url>
-AICREDITS_API_KEY=<secret>
+AICREDITS_API_KEY=<your-secret-key>
 ```
 
-Configured model roles live in `.env`:
+Model roles are set with `LLM_MODEL_DEFAULT`, `LLM_MODEL_FAST`, `LLM_MODEL_SMART`, `LLM_MODEL_REASONING`, `LLM_MODEL_CHEAP`, and `LLM_MODEL_EXPERIMENTAL`.
 
-```text
-LLM_MODEL_DEFAULT
-LLM_MODEL_FAST
-LLM_MODEL_SMART
-LLM_MODEL_REASONING
-LLM_MODEL_CHEAP
-LLM_MODEL_EXPERIMENTAL
+## API Overview
+
+Base path: `/api/v1`. Protected routes need `Authorization: Bearer <access_token>`.
+
+| Group | Endpoints |
+|---|---|
+| Health | `GET /health` |
+| Auth | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me` |
+| Agents | `POST /agents` · `GET /agents` · `GET /agents/{id}` · `PATCH /agents/{id}` · `DELETE /agents/{id}` |
+| Conversations | `POST /agents/{id}/conversations` · `GET /agents/{id}/conversations` · `GET /conversations/{id}` · `POST /conversations/{id}/messages` · `POST /conversations/{id}/runs` |
+| Tools | `GET /tools` · `GET /agents/{id}/tools` · `PUT /agents/{id}/tools` |
+| Routines | `POST /routines` · `GET /routines` · `GET /routines/{id}` · `PATCH /routines/{id}` · `DELETE /routines/{id}` · `POST /routines/{id}/run` · `GET /routines/{id}/runs` |
+| Integrations | `GET /integrations/gmail/status` |
+| Dashboard | `GET /dashboard/summary` · `GET /dashboard/recent-runs` · `GET /dashboard/recent-activity` · `GET /dashboard/action-items` |
+
+Every error follows one shape:
+
+```json
+{
+  "error": {
+    "code": "string_code",
+    "message": "Human readable message",
+    "details": {}
+  }
+}
 ```
 
-## Docs
+## Security
 
-- Production notes: `docs/production.md`
-- Demo script: `docs/demo-script.md`
-- Milestone plan: `docs/milestones.md`
-- Architecture diagram: `docs/architecture.svg`
+- Every query is scoped to the authenticated user
+- Passwords are hashed, access tokens are short-lived, refresh tokens are revocable
+- External integration tokens are never returned to clients
+- Secrets are never logged
+- Risky tool actions require explicit configuration
+
+## Documentation
+
+- [Milestone plan](docs/milestones.md)
+- [Production notes](docs/production.md)
+- [Demo script](docs/demo-script.md)
+
+## Roadmap
+
+- More integrations beyond Gmail
+- Confirmation-gated actions such as sending email or Slack messages
+
+## License
+
+Add a license file (for example MIT) and reference it here.
