@@ -1,0 +1,142 @@
+<svg width="1400" height="900" viewBox="0 0 1400 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1400" height="900" fill="#F7F8FA"/>
+  <rect x="42" y="36" width="1316" height="828" rx="22" fill="#FFFFFF" stroke="#D7DCE2"/>
+
+  <text x="700" y="84" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="34" font-weight="700" fill="#111827">AgentHub Backend Architecture</text>
+  <text x="700" y="116" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" fill="#5B6472">Personal AI automation backend for internship research, Gmail summaries, scheduled routines, and dashboard-ready logs</text>
+
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2 L10 6 L2 10 Z" fill="#374151"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2 L10 6 L2 10 Z" fill="#2563EB"/>
+    </marker>
+    <style>
+      .box-title { font: 700 18px Inter, Segoe UI, Arial, sans-serif; fill: #111827; }
+      .box-sub { font: 400 13px Inter, Segoe UI, Arial, sans-serif; fill: #4B5563; }
+      .small { font: 400 12px Inter, Segoe UI, Arial, sans-serif; fill: #6B7280; }
+      .lane { font: 700 14px Inter, Segoe UI, Arial, sans-serif; fill: #374151; letter-spacing: .6px; }
+    </style>
+  </defs>
+
+  <!-- Lanes -->
+  <rect x="78" y="158" width="260" height="642" rx="16" fill="#F1F5F9" stroke="#CBD5E1"/>
+  <text x="208" y="190" text-anchor="middle" class="lane">CLIENT</text>
+
+  <rect x="378" y="158" width="316" height="642" rx="16" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <text x="536" y="190" text-anchor="middle" class="lane">FASTAPI BACKEND</text>
+
+  <rect x="734" y="158" width="306" height="642" rx="16" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="887" y="190" text-anchor="middle" class="lane">AGENT RUNTIME</text>
+
+  <rect x="1080" y="158" width="242" height="642" rx="16" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <text x="1201" y="190" text-anchor="middle" class="lane">EXTERNAL SYSTEMS</text>
+
+  <!-- Client -->
+  <rect x="114" y="235" width="188" height="86" rx="10" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="208" y="266" text-anchor="middle" class="box-title">External Frontend</text>
+  <text x="208" y="291" text-anchor="middle" class="box-sub">Built separately</text>
+  <text x="208" y="311" text-anchor="middle" class="small">Dashboard, chat, routines</text>
+
+  <rect x="114" y="402" width="188" height="94" rx="10" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="208" y="434" text-anchor="middle" class="box-title">User</text>
+  <text x="208" y="459" text-anchor="middle" class="box-sub">Engineering student</text>
+  <text x="208" y="479" text-anchor="middle" class="small">Creates personal agents</text>
+
+  <!-- Backend API -->
+  <rect x="414" y="216" width="244" height="86" rx="10" fill="#FFFFFF" stroke="#64748B" stroke-width="1.5"/>
+  <text x="536" y="248" text-anchor="middle" class="box-title">API Gateway</text>
+  <text x="536" y="273" text-anchor="middle" class="box-sub">FastAPI /api/v1</text>
+  <text x="536" y="293" text-anchor="middle" class="small">Errors, validation, CORS</text>
+
+  <rect x="414" y="332" width="244" height="86" rx="10" fill="#FFFFFF" stroke="#64748B" stroke-width="1.5"/>
+  <text x="536" y="364" text-anchor="middle" class="box-title">Auth Layer</text>
+  <text x="536" y="389" text-anchor="middle" class="box-sub">JWT access + refresh</text>
+  <text x="536" y="409" text-anchor="middle" class="small">Current user dependency</text>
+
+  <rect x="414" y="448" width="244" height="116" rx="10" fill="#FFFFFF" stroke="#64748B" stroke-width="1.5"/>
+  <text x="536" y="480" text-anchor="middle" class="box-title">Domain Services</text>
+  <text x="536" y="505" text-anchor="middle" class="box-sub">Agents, conversations</text>
+  <text x="536" y="525" text-anchor="middle" class="box-sub">routines, dashboard</text>
+  <text x="536" y="545" text-anchor="middle" class="small">Business rules + ownership</text>
+
+  <rect x="414" y="610" width="244" height="104" rx="10" fill="#FFFFFF" stroke="#64748B" stroke-width="1.5"/>
+  <text x="536" y="642" text-anchor="middle" class="box-title">Repositories</text>
+  <text x="536" y="667" text-anchor="middle" class="box-sub">SQLAlchemy async</text>
+  <text x="536" y="687" text-anchor="middle" class="small">User-scoped DB access</text>
+
+  <!-- Agent runtime -->
+  <rect x="770" y="216" width="234" height="98" rx="10" fill="#FFFFFF" stroke="#6366F1" stroke-width="1.5"/>
+  <text x="887" y="248" text-anchor="middle" class="box-title">Agent Loop</text>
+  <text x="887" y="273" text-anchor="middle" class="box-sub">Plan, call tools, answer</text>
+  <text x="887" y="293" text-anchor="middle" class="small">Max iteration limit</text>
+
+  <rect x="770" y="352" width="234" height="98" rx="10" fill="#FFFFFF" stroke="#6366F1" stroke-width="1.5"/>
+  <text x="887" y="384" text-anchor="middle" class="box-title">LLM Client</text>
+  <text x="887" y="409" text-anchor="middle" class="box-sub">OpenAI-compatible</text>
+  <text x="887" y="429" text-anchor="middle" class="small">AICredits config</text>
+
+  <rect x="770" y="488" width="234" height="118" rx="10" fill="#FFFFFF" stroke="#6366F1" stroke-width="1.5"/>
+  <text x="887" y="520" text-anchor="middle" class="box-title">Tool Registry</text>
+  <text x="887" y="545" text-anchor="middle" class="box-sub">Internship research</text>
+  <text x="887" y="565" text-anchor="middle" class="box-sub">Gmail summary</text>
+  <text x="887" y="585" text-anchor="middle" class="small">Drafts, date/time, reports</text>
+
+  <rect x="770" y="652" width="234" height="88" rx="10" fill="#FFFFFF" stroke="#6366F1" stroke-width="1.5"/>
+  <text x="887" y="684" text-anchor="middle" class="box-title">Scheduler</text>
+  <text x="887" y="709" text-anchor="middle" class="box-sub">APScheduler</text>
+  <text x="887" y="729" text-anchor="middle" class="small">Morning routines + manual runs</text>
+
+  <!-- External systems -->
+  <rect x="1114" y="216" width="174" height="82" rx="10" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.5"/>
+  <text x="1201" y="248" text-anchor="middle" class="box-title">PostgreSQL</text>
+  <text x="1201" y="273" text-anchor="middle" class="box-sub">Users, agents</text>
+  <text x="1201" y="291" text-anchor="middle" class="small">messages, logs</text>
+
+  <rect x="1114" y="340" width="174" height="82" rx="10" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.5"/>
+  <text x="1201" y="372" text-anchor="middle" class="box-title">Composio</text>
+  <text x="1201" y="397" text-anchor="middle" class="box-sub">Gmail auth/tools</text>
+  <text x="1201" y="415" text-anchor="middle" class="small">No token exposure</text>
+
+  <rect x="1114" y="464" width="174" height="82" rx="10" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.5"/>
+  <text x="1201" y="496" text-anchor="middle" class="box-title">Search Sources</text>
+  <text x="1201" y="521" text-anchor="middle" class="box-sub">Internships</text>
+  <text x="1201" y="539" text-anchor="middle" class="small">Ranked opportunities</text>
+
+  <rect x="1114" y="588" width="174" height="92" rx="10" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.5"/>
+  <text x="1201" y="620" text-anchor="middle" class="box-title">Future Tools</text>
+  <text x="1201" y="645" text-anchor="middle" class="box-sub">Slack, Notion</text>
+  <text x="1201" y="665" text-anchor="middle" class="small">E2B browser later</text>
+
+  <!-- Arrows -->
+  <path d="M302 259 H414" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="358" y="245" text-anchor="middle" class="small">HTTP JSON</text>
+
+  <path d="M536 302 V332" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M536 418 V448" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M536 564 V610" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <path d="M658 506 H770" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <text x="714" y="492" text-anchor="middle" class="small">run agent</text>
+
+  <path d="M887 314 V352" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <path d="M887 450 V488" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <path d="M1004 548 H1114" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <text x="1058" y="532" text-anchor="middle" class="small">tool calls</text>
+
+  <path d="M1004 400 H1114" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <path d="M1004 696 H1080 C1100 696 1100 505 1114 505" stroke="#2563EB" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+
+  <path d="M658 662 H1114 C1096 662 1096 257 1114 257" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="875" y="638" text-anchor="middle" class="small">persist state, outputs, logs</text>
+
+  <path d="M887 652 V606" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="938" y="632" class="small">scheduled prompt</text>
+
+  <!-- Bottom notes -->
+  <rect x="116" y="786" width="1172" height="42" rx="10" fill="#ECFDF5" stroke="#A7F3D0"/>
+  <text x="702" y="812" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" fill="#065F46">
+    Safety baseline: read, summarize, rank, draft, and recommend are allowed; sending, deleting, applying, or messaging requires explicit user configuration or confirmation.
+  </text>
+</svg>
