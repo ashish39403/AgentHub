@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: .
+    container_name: agenthub-api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agenthub:agenthub@postgres:5432/agenthub
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001,http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "uv run --no-dev alembic upgrade head &&
+      uv run --no-dev uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: agenthub-postgres
+    environment:
+      POSTGRES_USER: agenthub
+      POSTGRES_PASSWORD: agenthub
+      POSTGRES_DB: agenthub
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agenthub -d agenthub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

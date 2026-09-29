@@ -1,2 +1,1 @@
-"""Internship research tool will be implemented during the internship MVP milestone."""
-
+"""Internship research tool will be designed under agent tool capabilities."""

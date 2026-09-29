@@ -5,6 +5,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_500_INTERNAL_SERVER_ERROR
 
 
+class AppHTTPException(Exception):
+    def __init__(self, *, status_code: int, code: str, message: str, details: object | None = None) -> None:
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+        self.details = details
+
+
 def error_response(status_code: int, code: str, message: str, details: object | None = None) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -19,6 +27,15 @@ def error_response(status_code: int, code: str, message: str, details: object | 
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AppHTTPException)
+    async def app_http_exception_handler(_: Request, exc: AppHTTPException) -> JSONResponse:
+        return error_response(
+            status_code=exc.status_code,
+            code=exc.code,
+            message=exc.message,
+            details=exc.details,
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         return error_response(

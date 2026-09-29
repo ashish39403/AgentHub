@@ -1,2 +1,190 @@
-"""Tool registry will be implemented during the core agent loop milestone."""
+from collections.abc import Awaitable, Callable
+from typing import Any
 
+from pydantic import ValidationError
+
+from app.agents.types import ToolDefinition, ToolExecutionResult
+from app.tools.context import ToolContext
+from app.tools.datetime_tool import get_current_datetime
+from app.tools.gmail_tools import gmail_summary
+from app.tools.integration_tools import github_issue_search, notion_create_page, send_slack_message
+from app.tools.internal_tools import draft_message, summarize_text
+from app.tools.memory_tools import get_memory, save_memory
+from app.tools.search_tool import web_search
+
+ToolHandler = Callable[[ToolContext, dict[str, Any]], Awaitable[dict[str, Any]]]
+
+
+async def datetime_handler(_: ToolContext, __: dict[str, Any]) -> dict[str, Any]:
+    return await get_current_datetime()
+
+
+async def summarize_text_handler(_: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
+    return summarize_text(arguments)
+
+
+async def draft_message_handler(_: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
+    return draft_message(arguments)
+
+
+async def web_search_handler(_: ToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
+    return await web_search(arguments)
+
+
+class ToolRegistry:
+    def __init__(self) -> None:
+        self._handlers: dict[str, ToolHandler] = {
+            "datetime": datetime_handler,
+            "web_search": web_search_handler,
+            "summarize_text": summarize_text_handler,
+            "save_memory": save_memory,
+            "get_memory": get_memory,
+            "draft_message": draft_message_handler,
+            "send_slack_message": lambda _, arguments: send_slack_message(arguments),
+            "gmail_summary": gmail_summary,
+            "notion_create_page": lambda _, arguments: notion_create_page(arguments),
+            "github_issue_search": lambda _, arguments: github_issue_search(arguments),
+        }
+        self._definitions: dict[str, ToolDefinition] = {
+            "datetime": ToolDefinition(
+                name="datetime",
+                description="Return the current UTC date and time.",
+                category="internal",
+                safety_level="safe",
+                parameters={"type": "object", "properties": {}, "additionalProperties": False},
+            ),
+            "web_search": ToolDefinition(
+                name="web_search",
+                description="Search the web using SerpAPI first, rewrite weak queries, then use Tavily fallback.",
+                category="search",
+                safety_level="read_only",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 10},
+                    },
+                    "required": ["query"],
+                },
+            ),
+            "summarize_text": ToolDefinition(
+                name="summarize_text",
+                description="Create a short deterministic summary of provided text.",
+                category="internal",
+                safety_level="safe",
+                parameters={
+                    "type": "object",
+                    "properties": {"text": {"type": "string"}, "max_chars": {"type": "integer"}},
+                    "required": ["text"],
+                },
+            ),
+            "save_memory": ToolDefinition(
+                name="save_memory",
+                description="Save a useful note/report for this agent.",
+                category="memory",
+                safety_level="safe",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                        "metadata": {"type": "object"},
+                    },
+                    "required": ["title", "content"],
+                },
+            ),
+            "get_memory": ToolDefinition(
+                name="get_memory",
+                description="Fetch saved notes/reports for this agent.",
+                category="memory",
+                safety_level="read_only",
+                parameters={"type": "object", "properties": {"limit": {"type": "integer"}}},
+            ),
+            "draft_message": ToolDefinition(
+                name="draft_message",
+                description="Draft a message without sending it.",
+                category="action",
+                safety_level="write_draft",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "recipient": {"type": "string"},
+                        "purpose": {"type": "string"},
+                        "tone": {"type": "string"},
+                    },
+                    "required": ["purpose"],
+                },
+            ),
+            "send_slack_message": ToolDefinition(
+                name="send_slack_message",
+                description="Prepare a Slack send action. Actual sending requires confirmation.",
+                category="action",
+                safety_level="external_action",
+                requires_confirmation=True,
+                parameters={
+                    "type": "object",
+                    "properties": {"channel": {"type": "string"}, "message": {"type": "string"}},
+                    "required": ["channel", "message"],
+                },
+            ),
+            "gmail_summary": ToolDefinition(
+                name="gmail_summary",
+                description="Summarize Gmail messages after Gmail is connected.",
+                category="integration",
+                safety_level="read_only",
+                parameters={"type": "object", "properties": {"max_emails": {"type": "integer"}}},
+            ),
+            "notion_create_page": ToolDefinition(
+                name="notion_create_page",
+                description="Create a Notion page after Notion is connected.",
+                category="integration",
+                safety_level="external_action",
+                requires_confirmation=True,
+                parameters={
+                    "type": "object",
+                    "properties": {"title": {"type": "string"}, "content": {"type": "string"}},
+                    "required": ["title"],
+                },
+            ),
+            "github_issue_search": ToolDefinition(
+                name="github_issue_search",
+                description="Search GitHub issues after GitHub integration is configured.",
+                category="integration",
+                safety_level="read_only",
+                parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            ),
+        }
+
+    def definitions(self, enabled_tools: list[str] | None = None) -> list[ToolDefinition]:
+        if enabled_tools is None:
+            return list(self._definitions.values())
+        enabled_tool_names = set(enabled_tools)
+        return [definition for name, definition in self._definitions.items() if name in enabled_tool_names]
+
+    def tool_names(self) -> set[str]:
+        return set(self._definitions)
+
+    async def execute(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        *,
+        context: ToolContext,
+        enabled_tools: list[str],
+    ) -> ToolExecutionResult:
+        if name not in enabled_tools:
+            return ToolExecutionResult(name=name, input=arguments, error=f"Tool '{name}' is not enabled for this agent.")
+
+        handler = self._handlers.get(name)
+        if handler is None:
+            return ToolExecutionResult(name=name, input=arguments, error=f"Tool '{name}' is not available.")
+
+        try:
+            output = await handler(context, arguments)
+            return ToolExecutionResult(name=name, input=arguments, output=output)
+        except (ValidationError, ValueError) as exc:
+            return ToolExecutionResult(name=name, input=arguments, error=str(exc))
+
+
+def get_tool_registry() -> ToolRegistry:
+    return ToolRegistry()

@@ -1,2 +1,1 @@
-"""Search integration will be implemented during the internship MVP milestone."""
-
+"""Search integration will be implemented when agent tool capabilities need search providers."""

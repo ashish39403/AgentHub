@@ -42,7 +42,7 @@ Done when:
 - safety rules are clear
 - build order is documented
 
-Status: in progress
+Status: done
 
 ## Milestone 1: Backend Foundation
 
@@ -69,6 +69,8 @@ Done when:
 - backend runs locally
 - tests pass
 - folder structure is ready for future modules
+
+Status: done
 
 ## Milestone 2: Database Foundation
 
@@ -104,6 +106,8 @@ Done when:
 - schema is controlled by migrations
 - test database flow works
 
+Status: done
+
 ## Milestone 3: Authentication
 
 Goal: implement secure user identity.
@@ -130,6 +134,8 @@ Done when:
 
 - users can authenticate
 - future APIs can safely scope data by user
+
+Status: done
 
 ## Milestone 4: Agent Management
 
@@ -164,13 +170,15 @@ Done when:
 - user can fully manage agents through API
 - all agent data is user-scoped
 
+Status: done
+
 ## Milestone 5: Conversations And Messages
 
 Goal: store chat history between user and agents.
 
 Build:
 
-- create conversation
+
 - list conversations for an agent
 - get conversation detail
 - save user messages
@@ -187,6 +195,8 @@ Done when:
 
 - agent chat history is persistent
 - frontend can load previous conversations
+
+Status: done
 
 ## Milestone 6: Core Agent Loop
 
@@ -206,9 +216,6 @@ Build:
 Initial tools:
 
 - date/time tool
-- internship research tool
-- draft message tool
-- save report tool
 
 Tests:
 
@@ -222,38 +229,65 @@ Done when:
 - agent can reason, call tools, and return final output
 - loop is understandable without heavy frameworks
 
-## Milestone 7: Internship Research MVP
+Status: done
 
-Goal: make the first real product use case work.
+## Milestone 7: Agent Tool Capabilities
+
+Goal: let user-created agents use configurable tools without turning the product into one hardcoded feature.
+
+Context:
+
+- AgentHub is not an internship search app.
+- A user can create any type of agent by writing instructions and an objective.
+- Tools are capabilities that agents can use, such as search, Gmail summary, drafting, reporting, or later internship research.
+- Internship research can be the first demo use case, but it should be implemented as an agent tool capability, not as a standalone product endpoint.
 
 Build:
 
-- internship research input schema
-- search/source adapter or mocked source for first version
-- opportunity ranking logic
-- summarized report format
-- action item extraction
-- saved result output
+- define a clean tool capability model
+- decide how tools are exposed to agents
+- start with safe built-in tools
+- add agent-level enabled tool configuration
+- expose APIs to view available tools
+- expose APIs to update which tools an agent can use
+- keep tool execution inside the agent loop
+- avoid feature-specific endpoints such as `/internships/research`
 
-Example result:
+Implemented catalog:
 
-```json
-{
-  "summary": "Top internship matches for today.",
-  "top_opportunities": [],
-  "action_items": []
-}
-```
+- `datetime`
+- `web_search`
+- `summarize_text`
+- `save_memory`
+- `get_memory`
+- `draft_message`
+- `send_slack_message`
+- `gmail_summary`
+- `notion_create_page`
+- `github_issue_search`
+
+Data model:
+
+- store enabled tool names as JSON on `agents`
+- store lightweight agent memory in `agent_memories`
+- risky action tools return confirmation-required outputs until approval flows exist
 
 Tests:
 
-- tool returns structured output
-- ranking works on sample data
-- agent can summarize ranked results
+- list available tools
+- update enabled tools for an agent
+- block unknown tool names
+- ensure users cannot update another user's agent tools
+- ensure agent loop only sees tools enabled for that agent
 
 Done when:
 
-- demo can show a student receiving ranked internship opportunities
+- agents have a clean tool capability system
+- tool availability is user/agent-scoped
+- future tools can be added without changing the product identity
+- internship research can be added later as one tool among many
+
+Status: done
 
 ## Milestone 8: Routines And Scheduler
 
@@ -280,8 +314,10 @@ Tests:
 
 Done when:
 
-- user can schedule daily internship research
+- user can schedule an agent routine
 - results are stored for dashboard display
+
+Status: done
 
 ## Milestone 9: Gmail Summary Agent
 
@@ -314,6 +350,8 @@ Done when:
 - user can receive daily Gmail summary and ranked important emails
 - no unsafe email action happens automatically
 
+Status: done
+
 ## Milestone 10: Controlled Scheduled Actions
 
 Goal: allow safe scheduled task automation.
@@ -342,6 +380,8 @@ Done when:
 
 - automation works without dangerous uncontrolled actions
 
+Status: done
+
 ## Milestone 11: Dashboard APIs
 
 Goal: expose frontend-ready summary APIs.
@@ -363,6 +403,8 @@ Tests:
 Done when:
 
 - frontend can build dashboard without complex backend logic
+
+Status: done
 
 ## Milestone 12: Production Readiness
 
@@ -391,6 +433,8 @@ Done when:
 - project can be demoed clearly
 - architecture can be explained in an interview
 
+Status: done
+
 ## Build Phase Entry Checklist
 
 Before starting code implementation:
@@ -412,4 +456,3 @@ Start with Milestone 1:
 4. add health route
 5. add pytest
 6. run first test
-

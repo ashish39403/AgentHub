@@ -23,7 +23,7 @@ We are not building a complete general-purpose agent platform in one pass. We ar
 - Migrations: Alembic
 - Validation: Pydantic v2
 - Auth: JWT access and refresh tokens, pwdlib
-- LLM: OpenAI-compatible client through AICredits
+- LLM: OpenAI SDK with AICredits/OpenAI-compatible base URLs
 - Tools: internal tools first, Composio later
 - Scheduler: APScheduler for MVP
 - Browser VM: E2B later, not MVP
@@ -39,12 +39,13 @@ We are not building a complete general-purpose agent platform in one pass. We ar
 5. Secrets must live only in `.env` or environment variables.
 6. Keep `.env.example` updated when adding new required settings.
 7. Ask before adding a new package or framework.
-8. Prefer simple explicit code over heavy abstractions.
-9. Do not use LangChain or heavy agent frameworks for the MVP agent loop.
-10. Every user-owned resource must be scoped by `user_id`.
-11. Sensitive actions such as sending messages, sending emails, deleting emails, or applying to internships must require explicit user configuration or confirmation.
-12. Routine runs and tool actions must be logged.
-13. APIs should be frontend-ready, stable, and documented.
+8. Use the official OpenAI Python SDK for OpenAI-compatible LLM calls instead of custom raw HTTP clients.
+9. Prefer simple explicit code over heavy abstractions.
+10. Do not use LangChain or heavy agent frameworks for the MVP agent loop.
+11. Every user-owned resource must be scoped by `user_id`.
+12. Sensitive actions such as sending messages, sending emails, deleting emails, or applying to internships must require explicit user configuration or confirmation.
+13. Routine runs and tool actions must be logged.
+14. APIs should be frontend-ready, stable, and documented.
 
 ## Safety Rules
 
@@ -66,4 +67,3 @@ We are not building a complete general-purpose agent platform in one pass. We ar
 - Use typed request/response schemas.
 - Prefer dependency injection for database sessions, auth, and services.
 - Keep logs useful but never log secrets.
-

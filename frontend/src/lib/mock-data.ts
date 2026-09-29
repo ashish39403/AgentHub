@@ -1,0 +1,485 @@
+import {
+  Agent,
+  Conversation,
+  Message,
+  Routine,
+  RoutineRun,
+  ToolActionLog,
+  ActionItem,
+  DashboardSummary,
+  Integration,
+  ToolDefinition,
+  User,
+} from '../types';
+
+export const mockUser: User = {
+  id: 'usr_elena_vance',
+  name: 'Elena Vance',
+  email: 'elena@agenthub.dev',
+  avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  role: 'Admin',
+  workspace_id: 'prod_us_east',
+  created_at: '2026-01-15T08:00:00Z',
+};
+
+export const availableTools: ToolDefinition[] = [
+  {
+    id: 'internship_research',
+    name: 'internship_research',
+    displayName: 'ATS & Job Board Scraper',
+    description: 'Queries verified Greenhouse, Lever, and Workday endpoints for latest tech roles',
+    category: 'search',
+    isBuiltIn: true,
+  },
+  {
+    id: 'parse_job_requirements',
+    name: 'parse_job_requirements',
+    displayName: 'Job Requirement Parser',
+    description: 'Extracts skills, stipend rates, remote flexibility, and visa sponsorship criteria',
+    category: 'productivity',
+    isBuiltIn: true,
+  },
+  {
+    id: 'save_report',
+    name: 'save_report',
+    displayName: 'Report Document Vault',
+    description: 'Saves structured JSON or Markdown reports to persistent workspace storage',
+    category: 'productivity',
+    isBuiltIn: true,
+  },
+  {
+    id: 'gmail_read',
+    name: 'gmail_read',
+    displayName: 'Gmail Reader API',
+    description: 'Fetches unread message threads, extracts metadata, and categorizes priority',
+    category: 'communication',
+    requiredPermissions: ['gmail.readonly'],
+  },
+  {
+    id: 'draft_message',
+    name: 'draft_message',
+    displayName: 'Message Draft Generator',
+    description: 'Generates concise synthesis email or Slack drafts with action items',
+    category: 'communication',
+    isBuiltIn: true,
+  },
+  {
+    id: 'github_api',
+    name: 'github_api',
+    displayName: 'GitHub Repository Inspector',
+    description: 'Monitors pull requests, release tags, and trending repo activity',
+    category: 'code',
+    requiredPermissions: ['repo.read'],
+  },
+  {
+    id: 'slack_notify',
+    name: 'slack_notify',
+    displayName: 'Slack Webhook Notifier',
+    description: 'Dispatches real-time structured blocks and alert cards into Slack channels',
+    category: 'communication',
+    requiredPermissions: ['chat:write'],
+  },
+  {
+    id: 'date_time',
+    name: 'date_time',
+    displayName: 'Temporal Utilities',
+    description: 'Calculates relative date deltas, timezone shifts, and schedule validation',
+    category: 'system',
+    isBuiltIn: true,
+  },
+  {
+    id: 'web_search',
+    name: 'web_search',
+    displayName: 'Live Web Indexer',
+    description: 'Performs low-latency search across documentation and tech publications',
+    category: 'search',
+    isBuiltIn: true,
+  },
+];
+
+export const initialAgents: Agent[] = [
+  {
+    id: 'agent_scout_01',
+    name: 'Internship Scout',
+    objective: 'Find remote Summer 2025 AI/ML engineering internships at top labs or Series A/B startups and draft weekly synthesis reports.',
+    instructions: 'You are an autonomous talent research assistant. Use the internship_research tool to query verified career boards. Filter for roles posted within the last 7 days. Structure findings by company, role title, compensation, and key tech stack before drafting reports.',
+    model: 'gemini-2.5-flash',
+    temperature: 0.2,
+    tools: ['internship_research', 'parse_job_requirements', 'save_report', 'draft_message'],
+    version: 'v2.1',
+    status: 'active',
+    created_at: '2026-02-01T10:00:00Z',
+    updated_at: '2026-03-28T09:14:00Z',
+  },
+  {
+    id: 'agent_inbox_02',
+    name: 'Inbox Summarizer',
+    objective: 'Scans unread Gmail inbox every morning, categorizes priority threads, and drafts action digests.',
+    instructions: 'Check unread emails using gmail_read. Categorize messages into Urgent, Action Required, Newsletters, and Low Priority. Draft a summary email highlighting time-sensitive deliverables.',
+    model: 'gemini-2.5-flash',
+    temperature: 0.3,
+    tools: ['gmail_read', 'draft_message', 'date_time'],
+    version: 'v1.4',
+    status: 'active',
+    created_at: '2026-02-10T14:30:00Z',
+    updated_at: '2026-03-29T08:00:00Z',
+  },
+  {
+    id: 'agent_github_03',
+    name: 'GitHub Release Tracker',
+    objective: 'Monitors upstream repository releases and commits, summarizing breaking changes and security notices.',
+    instructions: 'Poll tracked GitHub repositories for new tagged releases. Parse changelog markdown for breaking changes and deprecations. Send a summary to the engineering Slack channel.',
+    model: 'gemini-2.5-flash',
+    temperature: 0.1,
+    tools: ['github_api', 'slack_notify'],
+    version: 'v0.9 (Draft)',
+    status: 'draft',
+    created_at: '2026-03-20T11:20:00Z',
+    updated_at: '2026-03-25T16:45:00Z',
+  },
+];
+
+export const initialRoutines: Routine[] = [
+  {
+    id: 'rtn_inbox_digest',
+    agent_id: 'agent_inbox_02',
+    name: 'Morning inbox digest',
+    prompt: 'Read all unread threads from the last 24 hours, identify blockers, and draft a morning priorities digest.',
+    schedule: '0 8 * * *',
+    timezone: 'UTC',
+    is_active: true,
+    last_run_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    last_run_status: 'succeeded',
+    created_at: '2026-02-10T15:00:00Z',
+    updated_at: '2026-03-29T08:01:24Z',
+  },
+  {
+    id: 'rtn_live_run',
+    agent_id: 'agent_scout_01',
+    name: 'Internship Scout Live Run',
+    prompt: 'Query ATS boards for open Summer 2025 AI/ML internship roles posted in the last 7 days.',
+    schedule: 'Manual',
+    timezone: 'UTC',
+    is_active: true,
+    last_run_at: new Date(Date.now() - 45 * 1000).toISOString(),
+    last_run_status: 'running',
+    created_at: '2026-03-29T09:00:00Z',
+    updated_at: '2026-03-29T09:14:00Z',
+  },
+  {
+    id: 'rtn_weekly_scout',
+    agent_id: 'agent_scout_01',
+    name: 'Weekly internship report',
+    prompt: 'Compile full weekly ATS listings, compute salary/stipend percentiles, and generate markdown digest report.',
+    schedule: '0 9 * * 1',
+    timezone: 'UTC',
+    is_active: true,
+    last_run_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    last_run_status: 'failed',
+    created_at: '2026-02-01T11:00:00Z',
+    updated_at: '2026-03-28T09:00:32Z',
+  },
+  {
+    id: 'rtn_github_stars',
+    agent_id: 'agent_github_03',
+    name: 'GitHub Star Monitor',
+    prompt: 'Check repository metrics and notify team on Slack of milestone changes.',
+    schedule: '0 * * * *',
+    timezone: 'UTC',
+    is_active: true,
+    last_run_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    last_run_status: 'succeeded',
+    created_at: '2026-03-01T12:00:00Z',
+    updated_at: '2026-03-29T07:00:18Z',
+  },
+];
+
+export const initialRecentRuns: RoutineRun[] = [
+  {
+    id: 'run_1044',
+    routine_id: 'rtn_inbox_digest',
+    agent_id: 'agent_inbox_02',
+    status: 'succeeded',
+    trigger: 'scheduled',
+    duration: '1m 24s',
+    started_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    finished_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    tools_executed: ['gmail_read', 'summarize', 'draft_message'],
+    output: 'Analyzed 18 unread emails. 3 high-priority threads identified: Cloud provider invoice renewal, Product review agenda, and Customer security question. Draft created in inbox.',
+  },
+  {
+    id: 'run_1043',
+    routine_id: 'rtn_live_run',
+    agent_id: 'agent_scout_01',
+    status: 'running',
+    trigger: 'manual',
+    duration: '45s...',
+    started_at: new Date(Date.now() - 45 * 1000).toISOString(),
+    tools_executed: ['internship_research', 'parse_job_requirements'],
+    output: 'Querying Lever and Greenhouse career pages for 14 companies. Filtered 6 matching criteria.',
+  },
+  {
+    id: 'run_1042',
+    routine_id: 'rtn_weekly_scout',
+    agent_id: 'agent_scout_01',
+    status: 'failed',
+    trigger: 'scheduled',
+    duration: '32s',
+    started_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    finished_at: new Date(Date.now() - 24 * 60 * 60 * 1000 + 32000).toISOString(),
+    tools_executed: ['internship_research'],
+    error: 'Failed at tool internship_research: HTTP 429 rate limit exceeded from host source.',
+  },
+  {
+    id: 'run_1041',
+    routine_id: 'rtn_github_stars',
+    agent_id: 'agent_github_03',
+    status: 'succeeded',
+    trigger: 'scheduled',
+    duration: '18s',
+    started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    finished_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 18000).toISOString(),
+    tools_executed: ['github_api', 'slack_notify'],
+    output: 'Verified 6 tracked repositories. Dispatched update to #engineering-feed.',
+  },
+];
+
+export const initialToolLogs: ToolActionLog[] = [
+  {
+    id: 'tlog_01',
+    agent_id: 'agent_scout_01',
+    routine_run_id: 'run_1043',
+    tool_name: 'internship_research',
+    input: { query: 'site:lever.co OR site:greenhouse.io AI intern 2025', filter_days: 7 },
+    output: { status: '200 OK', matches_parsed: 14, sources: ['Anthropic', 'Perplexity AI', 'Adept', 'Cohere'] },
+    status: 'succeeded',
+    duration_ms: 1800,
+    created_at: new Date(Date.now() - 40 * 1000).toISOString(),
+  },
+  {
+    id: 'tlog_02',
+    agent_id: 'agent_scout_01',
+    routine_run_id: 'run_1043',
+    tool_name: 'parse_job_requirements',
+    input: { candidate_roles: 14, min_stipend: 45, allow_remote: true },
+    output: { evaluated: 14, passed_criteria: 6, top_roles: ['Anthropic Research Engineer Intern', 'Perplexity ML Systems Intern'] },
+    status: 'succeeded',
+    duration_ms: 850,
+    created_at: new Date(Date.now() - 25 * 1000).toISOString(),
+  },
+  {
+    id: 'tlog_03',
+    agent_id: 'agent_scout_01',
+    routine_run_id: 'run_1043',
+    tool_name: 'draft_message',
+    input: { format: 'markdown', include_stipends: true },
+    output: null,
+    status: 'succeeded',
+    duration_ms: 320,
+    created_at: new Date(Date.now() - 10 * 1000).toISOString(),
+  },
+];
+
+export const initialActionItems: ActionItem[] = [
+  {
+    id: 'act_01',
+    title: 'Gmail integration needs reconnecting',
+    description: 'OAuth refresh token expires shortly. Routine “Morning inbox digest” will fail on next trigger.',
+    level: 'warning',
+    badge_text: '3h remaining',
+    target_url: '/integrations',
+    action_label: 'Reconnect now',
+    secondary_action_label: 'Dismiss',
+    time_remaining: '3h remaining',
+    acknowledged: false,
+    created_at: '2026-03-29T06:00:00Z',
+  },
+  {
+    id: 'act_02',
+    title: 'Routine failed: Weekly internship report',
+    description: 'Failed at tool internship_research: HTTP 429 rate limit exceeded from host source.',
+    level: 'error',
+    badge_text: 'Run #1042',
+    target_url: '/routines/rtn_weekly_scout/runs/run_1042',
+    action_label: 'Retry',
+    secondary_action_label: 'View run details',
+    acknowledged: false,
+    created_at: '2026-03-28T09:01:00Z',
+  },
+];
+
+export const initialSummary: DashboardSummary = {
+  active_agents_count: 2,
+  healthy_agents_count: 2,
+  active_routines_count: 4,
+  next_routine_in_minutes: 42,
+  runs_this_week_count: 148,
+  success_rate_percentage: 98.6,
+  failed_runs_count: 2,
+  runs_trend_data: [18, 16, 20, 10, 12, 24, 28, 22],
+};
+
+export const initialConversations: Conversation[] = [
+  {
+    id: 'conv_scout_01',
+    agent_id: 'agent_scout_01',
+    title: 'Research AI internships Q2',
+    created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'conv_inbox_01',
+    agent_id: 'agent_inbox_02',
+    title: 'Inbox triage & priority',
+    created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'conv_scout_02',
+    agent_id: 'agent_scout_01',
+    title: 'Weekly report dry run',
+    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+export const initialMessages: Record<string, Message[]> = {
+  conv_scout_01: [
+    {
+      id: 'msg_01',
+      conversation_id: 'conv_scout_01',
+      role: 'user',
+      content: 'Find me remote Summer 2025 AI/ML engineering internships at top labs or Series-A/B startups, filter for listings posted in the last 7 days, and draft a markdown report with stipend notes.',
+      created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'msg_02',
+      conversation_id: 'conv_scout_01',
+      role: 'assistant',
+      content: `I've identified 3 top-tier machine learning roles that meet all parameters: strictly posted within the last 7 days, open to remote, and featuring competitive stipends.
+
+### Verified Positions:
+1. **Anthropic** — *Research Engineer Intern* ($68/hr • Remote-friendly)  
+   Focus: Interpretability, scalable alignment algorithms, PyTorch.
+2. **Perplexity AI** — *Machine Learning Systems Intern* ($9,500/mo • US Remote)  
+   Focus: Real-time RAG latency reduction, vLLM/TensorRT-LLM optimizations.
+3. **Adept** — *Foundation Model Intern* ($60/hr • SF / Hybrid)  
+   Focus: Multimodal action transformers, browser-environment agent trajectories.
+
+All roles have verified active application links saved in your workspace vault.`,
+      tool_calls: [
+        {
+          id: 'tc_01',
+          tool_name: 'internship_research',
+          input: { query: 'site:lever.co OR site:greenhouse.io AI intern 2025' },
+          output: { status: '200 OK (14 matches parsed)' },
+          status: 'succeeded',
+          duration_ms: 1800,
+        },
+        {
+          id: 'tc_02',
+          tool_name: 'parse_job_requirements',
+          input: { evaluated: 14 },
+          output: { passed_criteria: 6 },
+          status: 'succeeded',
+          duration_ms: 850,
+        },
+        {
+          id: 'tc_03',
+          tool_name: 'draft_message',
+          input: { format: 'markdown', count: 3 },
+          output: 'Report draft formatted successfully.',
+          status: 'succeeded',
+          duration_ms: 320,
+        },
+      ],
+      created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    },
+  ],
+  conv_inbox_01: [
+    {
+      id: 'msg_inbox_01',
+      conversation_id: 'conv_inbox_01',
+      role: 'user',
+      content: 'Run a quick scan on my priority inbox and list anything needing action before 11:00 AM.',
+      created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'msg_inbox_02',
+      conversation_id: 'conv_inbox_01',
+      role: 'assistant',
+      content: `Here is your morning inbox summary:
+
+- **Cloud Platform Renewal**: Contract approval required by 12:00 PM UTC.
+- **Sprint Retrospective**: Slides draft shared by Marcus for review.
+- **Security Audit Questionnaire**: Vendor review request from Enterprise client.
+
+Would you like me to draft affirmative responses for any of these?`,
+      tool_calls: [
+        {
+          id: 'tc_inbox_01',
+          tool_name: 'gmail_read',
+          input: { label: 'UNREAD', max_results: 20 },
+          output: { unread_found: 18, high_priority: 3 },
+          status: 'succeeded',
+          duration_ms: 640,
+        },
+      ],
+      created_at: new Date(Date.now() - 4 * 60 * 60 * 1000 + 4000).toISOString(),
+    },
+  ],
+};
+
+export const initialIntegrations: Integration[] = [
+  {
+    id: 'int_gmail',
+    name: 'Gmail API',
+    provider: 'gmail',
+    description: 'Read unread inbox messages, parse thread metadata, and draft outgoing summaries.',
+    status: 'expiring_soon',
+    scopes: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.compose'],
+    last_synced_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+    expires_at: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+    icon: 'mail',
+    account_email: 'elena@agenthub.dev',
+  },
+  {
+    id: 'int_github',
+    name: 'GitHub Platform',
+    provider: 'github',
+    description: 'Track organization repos, releases, open pull requests, and commit timelines.',
+    status: 'connected',
+    scopes: ['repo:read', 'read:org'],
+    last_synced_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    icon: 'code',
+    account_email: 'elenavance-hub',
+  },
+  {
+    id: 'int_slack',
+    name: 'Slack Webhook',
+    provider: 'slack',
+    description: 'Send structured agent execution digests and urgent alert cards into workspace channels.',
+    status: 'connected',
+    scopes: ['chat:write', 'channels:read'],
+    last_synced_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    icon: 'chat',
+  },
+  {
+    id: 'int_linear',
+    name: 'Linear Workspaces',
+    provider: 'linear',
+    description: 'Automatically file bug reports and assign issues derived from routine triage.',
+    status: 'disconnected',
+    scopes: ['issues:create', 'read'],
+    icon: 'check_box',
+  },
+  {
+    id: 'int_notion',
+    name: 'Notion Workspace',
+    provider: 'notion',
+    description: 'Sync weekly research and meeting notes into shared Notion databases.',
+    status: 'disconnected',
+    scopes: ['databases:write', 'pages:write'],
+    icon: 'description',
+  },
+];

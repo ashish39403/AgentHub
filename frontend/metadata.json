@@ -1,0 +1,6 @@
+{
+  "name": "AgentHub",
+  "description": "Orchestrate autonomous AI agents, manage interactive chats, and schedule recurring multi-tool routines.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
