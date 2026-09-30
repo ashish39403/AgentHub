@@ -62,3 +62,8 @@ async def create_message(
     session.add(message)
     await session.flush()
     return message
+
+
+async def delete_conversation(session: AsyncSession, conversation: Conversation) -> None:
+    await session.delete(conversation)
+    await session.flush()

@@ -109,6 +109,33 @@ def test_conversations_are_user_scoped(auth_client: TestClient) -> None:
     assert cross_message_response.json()["error"]["code"] == "conversation_not_found"
 
 
+def test_delete_conversation_removes_only_owned_conversation(auth_client: TestClient) -> None:
+    owner = register_user(auth_client, email="delete-conv-owner@example.com")
+    other_user = register_user(auth_client, email="delete-conv-other@example.com")
+    owner_headers = auth_headers(owner)
+    other_headers = auth_headers(other_user)
+    owner_agent = create_agent(auth_client, owner_headers)
+    other_agent = create_agent(auth_client, other_headers)
+    owner_conversation = create_conversation(auth_client, owner_headers, owner_agent["id"])
+    other_conversation = create_conversation(auth_client, other_headers, other_agent["id"])
+
+    cross_delete_response = auth_client.delete(f"/api/v1/conversations/{owner_conversation['id']}", headers=other_headers)
+
+    assert cross_delete_response.status_code == 404
+    assert cross_delete_response.json()["error"]["code"] == "conversation_not_found"
+
+    delete_response = auth_client.delete(f"/api/v1/conversations/{owner_conversation['id']}", headers=owner_headers)
+
+    assert delete_response.status_code == 204
+
+    missing_response = auth_client.get(f"/api/v1/conversations/{owner_conversation['id']}", headers=owner_headers)
+    other_detail_response = auth_client.get(f"/api/v1/conversations/{other_conversation['id']}", headers=other_headers)
+
+    assert missing_response.status_code == 404
+    assert missing_response.json()["error"]["code"] == "conversation_not_found"
+    assert other_detail_response.status_code == 200
+
+
 def test_conversation_routes_require_auth(auth_client: TestClient) -> None:
     response = auth_client.get("/api/v1/conversations/00000000-0000-0000-0000-000000000000")
 

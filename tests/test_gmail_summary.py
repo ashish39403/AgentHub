@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import json
 
 
 def register_user(client: TestClient, *, email: str) -> dict:
@@ -60,7 +61,7 @@ def test_gmail_summary_tool_returns_structured_read_only_output(auth_client: Tes
     assert response.status_code == 201
     body = response.json()
     assert body["tool_messages"][0]["tool_calls"]["name"] == "gmail_summary"
-    tool_content = body["tool_messages"][0]["content"]
+    tool_content = json.loads(body["tool_messages"][0]["content"])
     assert "important_emails" in tool_content
-    assert "send_enabled': False" in tool_content
-    assert "delete_enabled': False" in tool_content
+    assert tool_content["safety"]["send_enabled"] is False
+    assert tool_content["safety"]["delete_enabled"] is False

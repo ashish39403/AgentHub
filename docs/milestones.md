@@ -435,6 +435,109 @@ Done when:
 
 Status: done
 
+## Milestone 13: AI Engine V2 Architecture
+
+Goal: design and then implement a more explainable AI orchestration engine for interview-level understanding and future advanced agent behavior.
+
+Context:
+
+- The current engine is a custom OpenAI SDK tool-calling loop.
+- V2 should not rewrite the product from scratch.
+- V2 should make the engine easier to reason about: load context, build prompt, call model, route tools, enforce safety, save outputs.
+- LangGraph can be added later only after the design is accepted and dependencies are approved.
+
+Build:
+
+- `docs/ai-engine-v2.md`
+- typed agent run state
+- modular prompt builder
+- model router
+- tool router
+- policy guard for risky actions
+- tool result normalizer
+- graph-ready orchestration steps
+
+Tests:
+
+- current/latest/search prompts use search tools when enabled
+- disabled tools are blocked
+- risky tools return confirmation-required behavior
+- tool results are saved and passed back to the model
+- scheduled routines use the same engine behavior as chat
+
+Done when:
+
+- AI Engine V2 architecture is documented
+- code can be refactored step by step without changing frontend API contracts
+- the project has a clear interview explanation for how agents work end to end
+
+Status: in progress
+
+## Milestone 14: Frontend AI Chat Polish
+
+Goal: make the working AI engine feel smooth and product-ready from the frontend.
+
+Context:
+
+- The backend AI engine can call tools and produce grounded answers.
+- The frontend should not require manual setup steps before the first chat.
+- Agent edits should affect the next run without confusing stale UI state.
+
+Build:
+
+- auto-create a conversation when the user sends the first message
+- allow users to delete/clear their current conversation
+- progressively display assistant output from backend responses
+- keep tool-call cards visible before final answer text
+- invalidate agent/chat queries after agent edits so model, instructions, and tools apply immediately
+- keep API response shapes stable
+
+Tests:
+
+- deleting a conversation is user-scoped
+- deleted conversations are no longer visible
+- frontend build/lint passes
+- chat still shows tool calls and assistant response
+
+Done when:
+
+- user can open an agent and send a message immediately
+- user can clear/delete a conversation
+- frontend response appears progressively instead of only after full completion
+- agent edits are reflected in the next chat run
+
+Status: in progress
+
+## Milestone 15: Integration System
+
+Goal: make the integrations page and integration tools backend-driven, user-scoped, and safe.
+
+Build:
+
+- `docs/integrations.md`
+- integration provider catalog
+- user-scoped integration connection records
+- list/status/connect/disconnect APIs
+- frontend integrations page backed by real APIs
+- Gmail status wired through the integration service
+- safe not-connected responses for Slack, Notion, GitHub, and Gmail tools
+
+Tests:
+
+- list integrations for current user
+- connect/disconnect is user-scoped
+- not-connected tools return safe outputs
+- frontend typecheck/build passes
+
+Done when:
+
+- integrations page no longer depends on static mock state
+- users can see provider status from backend
+- agents can safely detect whether an integration is connected
+- write actions remain confirmation-required
+
+Status: planned
+
 ## Build Phase Entry Checklist
 
 Before starting code implementation:

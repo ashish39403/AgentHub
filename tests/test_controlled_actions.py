@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import json
 
 
 def register_user(client: TestClient, *, email: str) -> dict:
@@ -81,5 +82,6 @@ def test_slack_send_requires_confirmation_and_does_not_send(auth_client: TestCli
     assert response.status_code == 201
     body = response.json()
     assert body["tool_messages"][0]["tool_calls"]["name"] == "send_slack_message"
-    assert "confirmation_required" in body["tool_messages"][0]["content"]
-    assert "requires_confirmation': True" in body["tool_messages"][0]["content"]
+    tool_content = json.loads(body["tool_messages"][0]["content"])
+    assert tool_content["status"] == "confirmation_required"
+    assert tool_content["requires_confirmation"] is True

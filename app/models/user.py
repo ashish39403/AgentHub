@@ -18,3 +18,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     tool_action_logs: Mapped[list["ToolActionLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     agent_memories: Mapped[list["AgentMemory"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    integration_connections: Mapped[list["IntegrationConnection"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

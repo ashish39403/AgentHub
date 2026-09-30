@@ -1,4 +1,5 @@
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -41,3 +42,17 @@ class ToolExecutionResult(BaseModel):
     @property
     def succeeded(self) -> bool:
         return self.error is None
+
+
+class AgentRunState(BaseModel):
+    user_id: UUID
+    agent_id: UUID
+    conversation_id: UUID
+    routine_run_id: UUID | None = None
+    input_message: str
+    selected_model: str | None = None
+    enabled_tools: list[str] = Field(default_factory=list)
+    runtime_messages: list[AgentRuntimeMessage] = Field(default_factory=list)
+    tool_results: list[ToolExecutionResult] = Field(default_factory=list)
+    final_answer: str | None = None
+    error: str | None = None

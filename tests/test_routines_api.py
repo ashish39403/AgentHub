@@ -101,6 +101,20 @@ def test_run_routine_creates_run_log(auth_client: TestClient) -> None:
     assert len(runs_response.json()["runs"]) == 1
     assert runs_response.json()["runs"][0]["id"] == run["id"]
 
+    run_detail_response = auth_client.get(f"/api/v1/routines/{routine['id']}/runs/{run['id']}", headers=headers)
+    assert run_detail_response.status_code == 200
+    assert run_detail_response.json()["id"] == run["id"]
+
+    tool_logs_response = auth_client.get(
+        f"/api/v1/routines/{routine['id']}/runs/{run['id']}/tool-logs",
+        headers=headers,
+    )
+    assert tool_logs_response.status_code == 200
+    tool_logs = tool_logs_response.json()["tool_logs"]
+    assert len(tool_logs) == 1
+    assert tool_logs[0]["routine_run_id"] == run["id"]
+    assert tool_logs[0]["tool_name"] == "datetime"
+
 
 def test_routines_are_user_scoped(auth_client: TestClient) -> None:
     owner = register_user(auth_client, email="routine-private-owner@example.com")
@@ -117,6 +131,18 @@ def test_routines_are_user_scoped(auth_client: TestClient) -> None:
     assert cross_get.status_code == 404
     assert cross_run.status_code == 404
     assert cross_runs.status_code == 404
+
+    run = auth_client.post(f"/api/v1/routines/{routine['id']}/run", headers=owner_headers).json()
+    cross_run_detail = auth_client.get(
+        f"/api/v1/routines/{routine['id']}/runs/{run['id']}",
+        headers=other_headers,
+    )
+    cross_tool_logs = auth_client.get(
+        f"/api/v1/routines/{routine['id']}/runs/{run['id']}/tool-logs",
+        headers=other_headers,
+    )
+    assert cross_run_detail.status_code == 404
+    assert cross_tool_logs.status_code == 404
 
 
 def test_create_routine_rejects_other_users_agent(auth_client: TestClient) -> None:

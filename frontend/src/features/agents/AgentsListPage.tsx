@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, mockDb } from '../../lib/api-client';
+import { api } from '../../lib/api-client';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
@@ -40,6 +40,11 @@ export function AgentsListPage() {
     queryFn: () => api.getAgents(),
   });
 
+  const { data: routines = [] } = useQuery({
+    queryKey: ['routines-list'],
+    queryFn: () => api.getRoutines(),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteAgent(id),
     onSuccess: () => {
@@ -73,7 +78,7 @@ export function AgentsListPage() {
     });
   }, [agents, searchQuery, statusFilter]);
 
-  const activeCount = agents?.filter((a) => a.status === 'active').length ?? 2;
+  const activeCount = agents?.filter((a) => a.status === 'active').length ?? 0;
   const pausedCount = agents?.filter((a) => a.status === 'paused').length ?? 0;
 
   const templates = [
@@ -111,7 +116,7 @@ export function AgentsListPage() {
           objective: tmpl.description,
           instructions: `You are an automated worker specialized in: ${tmpl.prompt}. Coordinate tool outputs, validate schemas, and write synthesis summaries.`,
           tools: tmpl.tools,
-          model: 'gemini-2.5-flash',
+          model: 'google/gemini-2.5-flash',
         },
       },
     });
@@ -220,7 +225,7 @@ export function AgentsListPage() {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-semibold text-[#111827]">
-              {mockDb.routines.length}
+              {routines.length}
             </span>
             <span className="font-mono text-[11px] text-[#0f766e] font-medium">
               ROUTINES
@@ -256,7 +261,7 @@ export function AgentsListPage() {
               Configured Agents
             </span>
             <span className="px-2 py-0.5 rounded-full bg-white text-[#4b5563] font-mono text-[10px] font-medium border border-[#e5e7eb]">
-              {agents?.length ?? 3} total
+              {agents?.length ?? 0} total
             </span>
           </div>
           <div className="flex items-center gap-2 text-[#6b7280] text-xs font-medium">
@@ -279,8 +284,7 @@ export function AgentsListPage() {
         ) : (
           <div className="divide-y divide-[#e5e7eb] bg-white">
             {filteredAgents.map((agent) => {
-              const linkedRoutine = mockDb.routines.find((r) => r.agent_id === agent.id);
-              const isRunning = agent.id === 'agent_scout_01';
+              const linkedRoutine = routines.find((r) => r.agent_id === agent.id);
 
               return (
                 <div
@@ -363,17 +367,7 @@ export function AgentsListPage() {
                       <span className="text-[10px] uppercase font-semibold text-[#6b7280]">
                         Last Activity
                       </span>
-                      {isRunning ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#16a34a] opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#16a34a]" />
-                          </span>
-                          <span className="font-mono text-xs text-[#16a34a] font-medium">
-                            Running now
-                          </span>
-                        </div>
-                      ) : agent.status === 'draft' ? (
+                      {agent.status === 'draft' ? (
                         <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
                           <span className="w-2 h-2 rounded-full bg-[#9ca3af]" />
                           <span className="font-mono text-[11px]">Never run</span>
@@ -381,7 +375,9 @@ export function AgentsListPage() {
                       ) : (
                         <div className="flex items-center gap-1.5 text-xs text-[#4b5563]">
                           <CheckCircle2 className="w-3.5 h-3.5 text-[#16a34a]" />
-                          <span className="font-mono text-[11px]">12 minutes ago</span>
+                          <span className="font-mono text-[11px]">
+                            {linkedRoutine?.last_run_at ? 'Has routine history' : 'Ready'}
+                          </span>
                         </div>
                       )}
                     </div>

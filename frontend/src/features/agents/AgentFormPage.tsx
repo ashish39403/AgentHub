@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api-client';
-import { availableTools } from '../../lib/mock-data';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { Select } from '../../components/ui/Select';
@@ -26,6 +25,14 @@ const agentFormSchema = z.object({
 
 type AgentFormValues = z.infer<typeof agentFormSchema>;
 
+const modelOptions = [
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash (default, fast)' },
+  { value: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro (smart)' },
+  { value: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'NVIDIA Nemotron 3 Ultra 550B (reasoning)' },
+  { value: 'openai/gpt-3.5-turbo-0613', label: 'OpenAI GPT-3.5 Turbo 0613 (cheap)' },
+  { value: 'gpt-5-mini', label: 'GPT-5 Mini (experimental)' },
+];
+
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
@@ -42,6 +49,11 @@ export function AgentFormPage() {
     enabled: isEdit,
   });
 
+  const { data: availableTools = [] } = useQuery({
+    queryKey: ['tool-catalog'],
+    queryFn: () => api.getTools(),
+  });
+
   const {
     register,
     handleSubmit,
@@ -56,7 +68,7 @@ export function AgentFormPage() {
       name: '',
       objective: '',
       instructions: '',
-      model: 'gemini-2.5-flash',
+      model: 'google/gemini-2.5-flash',
       temperature: 0.2,
       tools: ['internship_research', 'draft_message'],
       version: 'v1.0',
@@ -70,7 +82,7 @@ export function AgentFormPage() {
         name: agent.name,
         objective: agent.objective,
         instructions: agent.instructions,
-        model: agent.model || 'gemini-2.5-flash',
+        model: agent.model || 'google/gemini-2.5-flash',
         temperature: agent.temperature ?? 0.2,
         tools: agent.tools || [],
         version: agent.version || 'v1.0',
@@ -81,7 +93,7 @@ export function AgentFormPage() {
         name: templateState.name || '',
         objective: templateState.objective || '',
         instructions: templateState.instructions || '',
-        model: templateState.model || 'gemini-2.5-flash',
+        model: templateState.model || 'google/gemini-2.5-flash',
         temperature: templateState.temperature ?? 0.2,
         tools: templateState.tools || [],
         version: 'v1.0',
@@ -113,8 +125,12 @@ export function AgentFormPage() {
   const updateMutation = useMutation({
     mutationFn: (data: AgentFormValues) => api.updateAgent(id!, data),
     onSuccess: (updated) => {
+      queryClient.setQueryData(['agent-detail', id], updated);
+      queryClient.setQueryData(['agent-chat-detail', id], updated);
       queryClient.invalidateQueries({ queryKey: ['agents-list'] });
       queryClient.invalidateQueries({ queryKey: ['agent-detail', id] });
+      queryClient.invalidateQueries({ queryKey: ['agent-chat-detail', id] });
+      queryClient.invalidateQueries({ queryKey: ['agent-conversations', id] });
       toast.success('Agent saved', `Updated "${updated.name}" successfully.`);
       navigate('/agents');
     },
@@ -240,11 +256,7 @@ export function AgentFormPage() {
               label="Foundation Model"
               error={errors.model?.message}
               {...register('model')}
-              options={[
-                { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Fast, Low Latency)' },
-                { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Deep Reasoning)' },
-                { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Tool Orchestration)' },
-              ]}
+              options={modelOptions}
             />
 
             <Controller

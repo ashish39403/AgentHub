@@ -20,9 +20,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const initAuth = async () => {
     try {
-      // In mock mode or when session token exists
-      const userData = await api.getMe();
-      setUser(userData);
+      const existingAccessToken = tokenStorage.getAccessToken();
+      const existingRefreshToken = tokenStorage.getRefreshToken();
+      if (!existingAccessToken && !existingRefreshToken) {
+        setUser(null);
+        return;
+      }
+
+      if (!existingAccessToken && existingRefreshToken) {
+        const refreshed = await api.refreshSession(existingRefreshToken);
+        setUser(refreshed.user);
+        return;
+      }
+
+      setUser(await api.getMe());
     } catch {
       setUser(null);
     } finally {

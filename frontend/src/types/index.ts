@@ -28,7 +28,7 @@ export const AgentSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   instructions: z.string().min(5, 'Instructions are required'),
   objective: z.string().min(5, 'Objective is required'),
-  model: z.string().default('gemini-2.5-flash'),
+  model: z.string().default('google/gemini-2.5-flash'),
   temperature: z.number().min(0).max(1).default(0.7),
   tools: z.array(z.string()).default([]),
   version: z.string().default('v1.0'),
@@ -54,9 +54,11 @@ export interface ToolDefinition {
   name: string;
   displayName: string;
   description: string;
-  category: 'search' | 'communication' | 'code' | 'system' | 'productivity';
+  category: 'search' | 'communication' | 'code' | 'system' | 'productivity' | 'internal' | 'memory' | 'action' | 'integration';
   requiredPermissions?: string[];
   isBuiltIn?: boolean;
+  safety_level?: string;
+  requires_confirmation?: boolean;
 }
 
 // Conversation & Messages
@@ -181,12 +183,16 @@ export interface Integration {
   name: string;
   provider: 'gmail' | 'github' | 'slack' | 'linear' | 'notion' | 'custom_webhook';
   description: string;
-  status: 'connected' | 'disconnected' | 'expiring_soon' | 'error';
+  status: 'connected' | 'disconnected' | 'pending' | 'expiring_soon' | 'error';
   scopes: string[];
   last_synced_at?: string;
   expires_at?: string;
   icon: string;
   account_email?: string;
+  configured?: boolean;
+  connected?: boolean;
+  message?: string;
+  connect_url?: string;
 }
 
 // Standard API Error

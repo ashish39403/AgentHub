@@ -4,27 +4,18 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Switch } from '../../components/ui/Switch';
 import { useToast } from '../../components/ui/Toast';
-import { mockDb } from '../../lib/api-client';
-import { Sun, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { Sun, Check } from 'lucide-react';
 
 export function SettingsPage() {
   const { user } = useAuth();
   const toast = useToast();
 
   const [workspaceName, setWorkspaceName] = useState('Workspace Prod (US East)');
-  const [apiBaseUrl, setApiBaseUrl] = useState(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000');
+  const [apiBaseUrl, setApiBaseUrl] = useState(import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000');
   const [telemetryEnabled, setTelemetryEnabled] = useState(true);
 
   const handleSave = () => {
     toast.success('Settings updated', 'Workspace preferences persisted.');
-  };
-
-  const handleResetMockData = () => {
-    if (confirm('Reset mock workspace to initial baseline data?')) {
-      mockDb.reset();
-      toast.success('Workspace reset', 'All agents, runs, and chats restored to defaults.');
-      setTimeout(() => window.location.reload(), 300);
-    }
   };
 
   return (
@@ -105,7 +96,7 @@ export function SettingsPage() {
 
           <Input
             label="FastAPI Backend Gateway URL"
-            hint="Default: http://localhost:8000"
+            hint="Default: http://127.0.0.1:8000"
             mono
             value={apiBaseUrl}
             onChange={(e) => setApiBaseUrl(e.target.value)}
@@ -117,34 +108,6 @@ export function SettingsPage() {
             checked={telemetryEnabled}
             onCheckedChange={setTelemetryEnabled}
           />
-        </div>
-
-        {/* Data & Mock Store Management */}
-        <div className="p-5 rounded-xl bg-white border border-[#e7e5e4] shadow-xs space-y-4">
-          <h2 className="text-sm font-semibold text-[#1e1b19] pb-2 border-b border-[#faf2ee]">
-            Local Sandbox & Data Store
-          </h2>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-xs font-semibold text-[#1e1b19] block">
-                Reset Mock State
-              </span>
-              <span className="text-xs text-[#57534e]">
-                Restores sample agents "Internship Scout", "Inbox Summarizer", routines and tool run histories.
-              </span>
-            </div>
-
-            <Button
-              variant="surface"
-              size="sm"
-              onClick={handleResetMockData}
-              className="shadow-xs"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset to Defaults</span>
-            </Button>
-          </div>
         </div>
 
         {/* Save Button */}

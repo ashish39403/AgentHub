@@ -8,9 +8,68 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.agents.types import AgentRuntimeMessage, LLMResponse, ToolCall, ToolDefinition
 from app.db.base import Base
 from app.db.session import get_db_session
 from app.main import create_app
+
+
+class TestLLMClient:
+    async def complete(
+        self,
+        *,
+        messages: list[AgentRuntimeMessage],
+        tools: list[ToolDefinition],
+    ) -> LLMResponse:
+        last_message = messages[-1]
+        if last_message.role == "tool":
+            return LLMResponse(content=f"I used {last_message.name} and found this result: {last_message.content}")
+
+        latest_user_message = next((message for message in reversed(messages) if message.role == "user"), None)
+        if latest_user_message is None:
+            return LLMResponse(content="I need a user message before I can help.")
+
+        content = latest_user_message.content.lower()
+        available_tool_names = {tool.name for tool in tools}
+
+        if ("web search" in content or "search" in content) and "web_search" in available_tool_names:
+            return LLMResponse(tool_call=ToolCall(name="web_search", arguments={"query": latest_user_message.content}))
+        if ("summarize" in content or "summary" in content) and "summarize_text" in available_tool_names:
+            return LLMResponse(tool_call=ToolCall(name="summarize_text", arguments={"text": latest_user_message.content}))
+        if ("save" in content or "remember" in content) and "save_memory" in available_tool_names:
+            return LLMResponse(
+                tool_call=ToolCall(
+                    name="save_memory",
+                    arguments={"title": "Saved note", "content": latest_user_message.content},
+                )
+            )
+        if ("saved" in content or "memory" in content) and "get_memory" in available_tool_names:
+            return LLMResponse(tool_call=ToolCall(name="get_memory", arguments={"limit": 10}))
+        if ("gmail" in content or "email" in content) and "gmail_summary" in available_tool_names:
+            return LLMResponse(tool_call=ToolCall(name="gmail_summary", arguments={"max_emails": 5}))
+        if ("slack" in content and "send" in content) and "send_slack_message" in available_tool_names:
+            return LLMResponse(
+                tool_call=ToolCall(
+                    name="send_slack_message",
+                    arguments={"channel": "#general", "message": latest_user_message.content},
+                )
+            )
+        if ("draft" in content or "message" in content or "remind" in content) and "draft_message" in available_tool_names:
+            return LLMResponse(
+                tool_call=ToolCall(
+                    name="draft_message",
+                    arguments={"recipient": "there", "purpose": latest_user_message.content, "tone": "professional"},
+                )
+            )
+        if ("time" in content or "date" in content) and "datetime" in available_tool_names:
+            return LLMResponse(tool_call=ToolCall(name="datetime", arguments={}))
+
+        return LLMResponse(content=latest_user_message.content)
+
+
+@pytest.fixture(autouse=True)
+def use_test_llm_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.agents.loop.get_llm_client", lambda **_: TestLLMClient())
 
 
 @pytest.fixture

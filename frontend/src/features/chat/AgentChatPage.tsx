@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, mockDb, streamMessageHelper } from '../../lib/api-client';
-import { ToolCallPayload } from '../../types';
+import { api, streamMessageHelper } from '../../lib/api-client';
+import { Message, ToolCallPayload } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { formatRelativeTime } from '../../lib/utils';
@@ -71,6 +71,7 @@ export function AgentChatPage() {
   });
 
   const messages = currentConversation?.messages || [];
+  const chatItems = buildChatItems(messages);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -90,8 +91,22 @@ export function AgentChatPage() {
     },
   });
 
+  const deleteConvMutation = useMutation({
+    mutationFn: (conversationId: string) => api.deleteConversation(conversationId),
+    onSuccess: async () => {
+      const deletedConversationId = activeConvId;
+      setActiveConvId(null);
+      await queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
+      if (deletedConversationId) {
+        queryClient.removeQueries({ queryKey: ['conversation-messages', deletedConversationId] });
+      }
+      toast.success('Conversation cleared', 'The current conversation was deleted.');
+    },
+    onError: () => toast.error('Delete failed', 'Could not delete this conversation.'),
+  });
+
   const handleSend = async () => {
-    if (!inputMessage.trim() || isStreaming || !activeConvId) return;
+    if (!inputMessage.trim() || isStreaming || !agentId) return;
 
     const userText = inputMessage;
     setInputMessage('');
@@ -102,8 +117,22 @@ export function AgentChatPage() {
     const abortCtrl = new AbortController();
     abortControllerRef.current = abortCtrl;
 
+    let conversationId = activeConvId;
+    if (!conversationId) {
+      try {
+        const newConversation = await api.createConversation(agentId, userText.slice(0, 60) || 'New Exploration Session');
+        conversationId = newConversation.id;
+        setActiveConvId(newConversation.id);
+        queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
+      } catch (err) {
+        setIsStreaming(false);
+        toast.error('Session error', err instanceof Error ? err.message : 'Could not start a conversation.');
+        return;
+      }
+    }
+
     await streamMessageHelper({
-      conversationId: activeConvId,
+      conversationId,
       content: userText,
       signal: abortCtrl.signal,
       onToken: (token) => {
@@ -187,7 +216,6 @@ export function AgentChatPage() {
           <div className="flex-1 overflow-y-auto px-2 space-y-1">
             {filteredConvs.map((conv) => {
               const isActive = conv.id === activeConvId;
-              const lastMsg = mockDb.messages[conv.id]?.[mockDb.messages[conv.id]?.length - 1];
 
               return (
                 <div
@@ -215,7 +243,7 @@ export function AgentChatPage() {
                     {conv.title}
                   </p>
                   <p className="font-mono text-[10px] text-[#6b7280] truncate mt-0.5">
-                    {lastMsg?.content || 'Session initialized'}
+                    Updated {formatRelativeTime(conv.updated_at)}
                   </p>
                 </div>
               );
@@ -257,13 +285,11 @@ export function AgentChatPage() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => {
-                  if (activeConvId) {
-                    mockDb.messages[activeConvId] = [];
-                    mockDb.save();
-                    refetchConversation();
-                    toast.info('Conversation cleared');
+                  if (activeConvId && !isStreaming) {
+                    deleteConvMutation.mutate(activeConvId);
                   }
                 }}
+                disabled={!activeConvId || isStreaming || deleteConvMutation.isPending}
                 className="p-1.5 rounded text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6] transition-colors cursor-pointer"
                 title="Clear conversation"
               >
@@ -298,7 +324,7 @@ export function AgentChatPage() {
 
           {/* Message Stream Body */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 bg-white">
-            {messages.map((msg) => {
+            {chatItems.map(({ message: msg, tools }) => {
               const isUser = msg.role === 'user';
 
               if (isUser) {
@@ -334,9 +360,9 @@ export function AgentChatPage() {
                     </div>
 
                     {/* Tool Call Cards */}
-                    {msg.tool_calls && msg.tool_calls.length > 0 && (
+                    {tools.length > 0 && (
                       <div className="space-y-2">
-                        {msg.tool_calls.map((tool) => {
+                        {tools.map((tool) => {
                           const isCollapsed = collapsedTools[tool.id];
 
                           return (
@@ -376,7 +402,7 @@ export function AgentChatPage() {
                                   {tool.output && (
                                     <div>
                                       <span className="text-[#16a34a] font-medium">status: </span>
-                                      {typeof tool.output === 'object' ? JSON.stringify(tool.output) : tool.output}
+                                      {formatToolOutput(tool.output)}
                                     </div>
                                   )}
                                 </div>
@@ -642,4 +668,62 @@ export function AgentChatPage() {
       </div>
     </div>
   );
+}
+
+function buildChatItems(messages: Message[]): { message: Message; tools: ToolCallPayload[] }[] {
+  const items: { message: Message; tools: ToolCallPayload[] }[] = [];
+  let pendingTools: ToolCallPayload[] = [];
+
+  for (const message of messages) {
+    if (message.role === 'tool') {
+      const toolCalls = message.tool_calls || [];
+      const parsedOutput = parseToolOutput(message.content);
+      pendingTools.push(
+        ...toolCalls.map((tool) => ({
+          ...tool,
+          output: parsedOutput,
+          status: 'succeeded' as const,
+        }))
+      );
+      continue;
+    }
+
+    if (message.role === 'assistant') {
+      items.push({ message, tools: [...pendingTools, ...(message.tool_calls || [])] });
+      pendingTools = [];
+      continue;
+    }
+
+    items.push({ message, tools: [] });
+  }
+
+  if (pendingTools.length > 0) {
+    const lastAssistant = [...items].reverse().find((item) => item.message.role === 'assistant');
+    if (lastAssistant) {
+      lastAssistant.tools.push(...pendingTools);
+    }
+  }
+
+  return items;
+}
+
+function parseToolOutput(content: string): Record<string, unknown> | string {
+  try {
+    const parsed = JSON.parse(content);
+    return typeof parsed === 'object' && parsed !== null ? parsed : content;
+  } catch {
+    return content;
+  }
+}
+
+function formatToolOutput(output: Record<string, unknown> | string): string {
+  if (typeof output === 'string') {
+    return output.length > 320 ? `${output.slice(0, 320)}...` : output;
+  }
+
+  const status = typeof output.status === 'string' ? output.status : 'completed';
+  const provider = typeof output.primary_provider === 'string' ? ` via ${output.primary_provider}` : '';
+  const tavily = output.tavily_used === true ? ' + Tavily fallback' : '';
+  const headline = typeof output.headline === 'string' ? ` - ${output.headline}` : '';
+  return `${status}${provider}${tavily}${headline}`;
 }

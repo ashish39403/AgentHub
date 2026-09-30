@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_access_token_expire_minutes: int = Field(default=15, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
     jwt_refresh_token_expire_days: int = Field(default=30, alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
-    llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")
+    llm_provider: str = Field(default="aicredits", alias="LLM_PROVIDER")
     agent_max_iterations: int = Field(default=4, alias="AGENT_MAX_ITERATIONS")
     llm_model_default: str = Field(default="google/gemini-2.5-flash", alias="LLM_MODEL_DEFAULT")
     llm_model_fast: str = Field(default="google/gemini-2.5-flash", alias="LLM_MODEL_FAST")
@@ -30,10 +30,12 @@ class Settings(BaseSettings):
     aicredits_base_url: str | None = Field(default=None, alias="AICREDITS_BASE_URL")
     aicredits_api_key: str | None = Field(default=None, alias="AICREDITS_API_KEY")
     composio_api_key: str | None = Field(default=None, alias="COMPOSIO_API_KEY")
+    serper_api_key: str | None = Field(default=None, alias="SERPER_API_KEY")
     serpapi_api_key: str | None = Field(default=None, alias="SERPAPI_API_KEY")
     tavily_api_key: str | None = Field(default=None, alias="TAVILY_API_KEY")
+    enable_tavily_fallback: bool = Field(default=False, alias="ENABLE_TAVILY_FALLBACK")
     cors_origins_raw: str = Field(
-        default="http://localhost:3000,http://localhost:5173",
+        default="http://localhost:3000",
         alias="CORS_ORIGINS",
     )
 
@@ -42,6 +44,12 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins_raw.split(",") if origin.strip()]
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        if self.app_env == "production":
+            return None
+        return r"^http://(localhost|127\.0\.0\.1):[0-9]+$"
 
     @property
     def llm_models(self) -> dict[str, str]:

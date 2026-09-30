@@ -72,6 +72,12 @@ async def create_user_message(
     return message
 
 
+async def delete_user_conversation(session: AsyncSession, *, user: User, conversation_id: UUID) -> None:
+    conversation = await get_user_conversation(session, user=user, conversation_id=conversation_id)
+    await conversation_repository.delete_conversation(session, conversation)
+    await session.commit()
+
+
 async def run_user_conversation_agent(
     session: AsyncSession,
     *,
@@ -89,6 +95,7 @@ __all__ = [
     "ConversationNotFoundError",
     "create_user_conversation",
     "create_user_message",
+    "delete_user_conversation",
     "get_user_conversation",
     "list_user_agent_conversations",
     "run_user_conversation_agent",

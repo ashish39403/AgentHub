@@ -2,13 +2,14 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.agent import Agent
 from app.models.user import User
 from app.repositories import agents as agent_repository
 from app.schemas.agent import AgentCreate, AgentUpdate
 from app.tools.registry import get_tool_registry
 
-DEFAULT_AGENT_TOOLS = ["datetime"]
+DEFAULT_AGENT_TOOLS = ["datetime", "web_search", "summarize_text", "draft_message", "save_memory", "get_memory"]
 
 
 class AgentNotFoundError(ValueError):
@@ -23,6 +24,8 @@ async def create_user_agent(session: AsyncSession, *, user: User, payload: Agent
         name=payload.name.strip(),
         instructions=payload.instructions.strip(),
         objective=payload.objective.strip(),
+        model=(payload.model or settings.llm_model_default).strip(),
+        temperature=payload.temperature if payload.temperature is not None else 0.2,
         enabled_tools=enabled_tools,
     )
     await session.commit()

@@ -5,7 +5,6 @@ import { Integration } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
-import { Input } from '../../components/ui/Input';
 import { useToast } from '../../components/ui/Toast';
 import { formatRelativeTime } from '../../lib/utils';
 import {
@@ -27,7 +26,6 @@ export function IntegrationsPage() {
   const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeModalInt, setActiveModalInt] = useState<Integration | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState('');
 
   const { data: integrations, isLoading } = useQuery({
     queryKey: ['integrations-list'],
@@ -35,27 +33,20 @@ export function IntegrationsPage() {
   });
 
   const connectMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<Integration> }) =>
-      api.updateIntegration(id, patch),
+    mutationFn: (provider: string) => api.connectIntegration(provider),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['integrations-list'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-action-items'] });
-      toast.success(
-        'Integration connected',
-        `${updated.name} credentials verified & active.`
-      );
+      if (updated.connect_url) {
+        window.open(updated.connect_url, '_blank', 'noopener,noreferrer');
+      }
+      toast.success('Connection requested', updated.message || `${updated.name} connection started.`);
       setActiveModalInt(null);
-      setApiKeyInput('');
     },
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.updateIntegration(id, {
-        status: 'disconnected',
-        account_email: undefined,
-        expires_at: undefined,
-      }),
+    mutationFn: (provider: string) => api.disconnectIntegration(provider),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['integrations-list'] });
       toast.info('Integration disconnected', `${updated.name} revoked.`);
@@ -126,6 +117,7 @@ export function IntegrationsPage() {
         ) : (
           filteredIntegrations.map((item) => {
             const isConnected = item.status === 'connected';
+            const isPending = item.status === 'pending';
             const isExpiring = item.status === 'expiring_soon' || item.status === 'error';
 
             return (
@@ -143,6 +135,8 @@ export function IntegrationsPage() {
                       status={
                         isConnected
                           ? 'active'
+                          : isPending
+                          ? 'warning'
                           : isExpiring
                           ? 'warning'
                           : 'queued'
@@ -150,6 +144,8 @@ export function IntegrationsPage() {
                     >
                       {item.status === 'connected'
                         ? 'Connected'
+                        : item.status === 'pending'
+                        ? 'Pending'
                         : item.status === 'expiring_soon'
                         ? 'Expiring soon'
                         : item.status === 'error'
@@ -193,6 +189,13 @@ export function IntegrationsPage() {
                     </div>
                   )}
 
+                  {isPending && (
+                    <div className="p-2.5 rounded-lg bg-[#f0fdfa] border border-[#99f6e4] text-xs text-[#0f766e] flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{item.message || 'Connection requested. Complete OAuth before agents can use this provider.'}</span>
+                    </div>
+                  )}
+
                   {/* Permissions Scopes */}
                   <div className="pt-2">
                     <span className="text-[10px] uppercase font-semibold text-[#6b7280] block mb-1.5">
@@ -224,7 +227,7 @@ export function IntegrationsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => disconnectMutation.mutate(item.id)}
+                      onClick={() => disconnectMutation.mutate(item.provider)}
                       className="h-8 shadow-2xs"
                     >
                       <Unlink className="w-3.5 h-3.5 text-[#dc2626]" />
@@ -267,19 +270,11 @@ export function IntegrationsPage() {
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() =>
-                  connectMutation.mutate({
-                    id: activeModalInt.id,
-                    patch: {
-                      status: 'connected',
-                      account_email: 'elena@agenthub.dev',
-                      expires_at: new Date(Date.now() + 86400000 * 30).toISOString(),
-                    },
-                  })
-                }
+                onClick={() => connectMutation.mutate(activeModalInt.provider)}
+                disabled={connectMutation.isPending}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Confirm & Authorize</span>
+                <span>{connectMutation.isPending ? 'Starting...' : 'Start connection'}</span>
               </Button>
             </>
           }
@@ -289,18 +284,13 @@ export function IntegrationsPage() {
               {getProviderIcon(activeModalInt.provider)}
               <div className="text-xs text-[#0f766e]">
                 <span className="font-semibold block">OAuth 2.0 PKCE Flow</span>
-                <span>Tokens are encrypted with AES-256 and never stored in plain text.</span>
+                <span>Composio owns OAuth token custody; AgentHub stores only connection status and IDs.</span>
               </div>
             </div>
-
-            <Input
-              label="API Key / Token Override (Optional)"
-              mono
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx or xoxb-..."
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              hint="Leave blank to use default workspace SSO"
-            />
+            <p className="text-xs text-[#4b5563] leading-relaxed">
+              {activeModalInt.message ||
+                'The backend will create a provider connection request. Agents cannot use this integration until the account is connected.'}
+            </p>
           </div>
         </Modal>
       )}

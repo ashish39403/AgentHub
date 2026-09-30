@@ -4,7 +4,14 @@ from app.integrations.composio_client import get_composio_client
 
 
 async def get_gmail_connection_status(*, user_id) -> dict:
-    return await get_composio_client().get_connection_status(user_id=user_id, provider="gmail")
+    configured = get_composio_client().is_configured()
+    return {
+        "provider": "gmail",
+        "configured": configured,
+        "connected": False,
+        "status": "disconnected",
+        "message": "Use the integration service with a database session for user-scoped Gmail connection status.",
+    }
 
 
 async def fetch_recent_emails(*, user_id, max_emails: int = 5) -> list[dict]:

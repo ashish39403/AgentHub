@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, mockDb } from '../../lib/api-client';
+import { api } from '../../lib/api-client';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { useToast } from '../../components/ui/Toast';
@@ -20,13 +20,28 @@ export function RoutineRunDetailsPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  const run = mockDb.runs.find((r) => r.id === runId) || mockDb.runs[0];
-  const routine = mockDb.routines.find((r) => r.id === (routineId || run?.routine_id));
-  const agent = mockDb.agents.find((a) => a.id === run?.agent_id);
+  const { data: run, isLoading: isRunLoading } = useQuery({
+    queryKey: ['routine-run-detail', routineId, runId],
+    queryFn: () => (routineId && runId ? api.getRoutineRun(routineId, runId) : null),
+    enabled: !!routineId && !!runId,
+  });
+
+  const { data: routine } = useQuery({
+    queryKey: ['routine-detail', routineId],
+    queryFn: () => (routineId ? api.getRoutine(routineId) : null),
+    enabled: !!routineId,
+  });
+
+  const { data: agent } = useQuery({
+    queryKey: ['agent-detail', run?.agent_id],
+    queryFn: () => (run?.agent_id ? api.getAgent(run.agent_id) : null),
+    enabled: !!run?.agent_id,
+  });
 
   const { data: toolLogs } = useQuery({
-    queryKey: ['run-tool-logs', runId],
-    queryFn: () => (runId ? api.getToolLogsForRun(runId) : []),
+    queryKey: ['run-tool-logs', routineId, runId],
+    queryFn: () => (routineId && runId ? api.getToolLogsForRun(routineId, runId) : []),
+    enabled: !!routineId && !!runId,
   });
 
   const retryMutation = useMutation({
@@ -37,6 +52,10 @@ export function RoutineRunDetailsPage() {
       navigate(`/routines/${newRun.routine_id}/runs/${newRun.id}`);
     },
   });
+
+  if (isRunLoading) {
+    return <div className="p-8 text-center text-xs text-[#6b7280]">Loading run details...</div>;
+  }
 
   if (!run) {
     return (

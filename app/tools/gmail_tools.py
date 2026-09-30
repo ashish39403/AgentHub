@@ -1,4 +1,5 @@
-from app.integrations.gmail import fetch_recent_emails, get_gmail_connection_status
+from app.integrations.gmail import fetch_recent_emails
+from app.services.integration_service import get_provider_status_dict
 from app.tools.context import ToolContext
 
 
@@ -10,7 +11,7 @@ async def gmail_summary(context: ToolContext, arguments: dict) -> dict:
 
     ranked_emails = rank_emails(emails)
     action_items = extract_action_items(ranked_emails)
-    connection = await get_gmail_connection_status(user_id=context.user_id)
+    connection = await get_provider_status_dict(context.session, user_id=context.user_id, provider="gmail")
 
     return {
         "source": "mock" if not connection["connected"] else "gmail",

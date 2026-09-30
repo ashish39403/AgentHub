@@ -61,12 +61,19 @@ def test_agent_tools_default_and_update(auth_client: TestClient) -> None:
     headers = auth_headers(auth)
     agent = create_agent(auth_client, headers)
 
-    assert agent["enabled_tools"] == ["datetime"]
+    assert agent["enabled_tools"] == [
+        "datetime",
+        "web_search",
+        "summarize_text",
+        "draft_message",
+        "save_memory",
+        "get_memory",
+    ]
 
     get_response = auth_client.get(f"/api/v1/agents/{agent['id']}/tools", headers=headers)
 
     assert get_response.status_code == 200
-    assert get_response.json()["enabled_tools"] == ["datetime"]
+    assert get_response.json()["enabled_tools"] == agent["enabled_tools"]
 
     update_response = auth_client.put(
         f"/api/v1/agents/{agent['id']}/tools",

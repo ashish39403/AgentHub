@@ -53,6 +53,14 @@ An engineering student who is actively looking for internships and wants to redu
 - Max iteration limit
 - Final answer saved to conversation history
 
+### AI Engine V2 Planning
+
+- Keep the MVP agent behavior stable while designing the next engine version.
+- Define the engine as a backend orchestrator around LLM calls, tools, memory, safety policy, and logs.
+- Prepare the architecture so LangGraph can be added later without changing frontend-facing API contracts.
+- Keep the backend responsible for user ownership, tool permissions, confirmation gates, and persistence.
+- Use [AI Engine V2 Design](./ai-engine-v2.md) as the source of truth before installing new AI orchestration dependencies.
+
 ### Internship Research Agent
 
 - Run a prompt such as: "Find relevant internships for a software engineering student."
@@ -102,6 +110,7 @@ An engineering student who is actively looking for internships and wants to redu
 - More Composio integrations such as Slack, Notion, GitHub, and Google Calendar
 - OAuth login with Google or GitHub
 - E2B browser VM per agent
+- Optional LangGraph-based orchestration for AI Engine V2
 - Streaming responses through SSE
 - Advanced notification system
 - Better search provider integrations
@@ -129,4 +138,3 @@ An engineering student who is actively looking for internships and wants to redu
 - Internship research routine produces a saved ranked summary.
 - Gmail summary flow is designed safely and integrated when credentials are available.
 - Tests cover auth, agent CRUD, routine creation, and core agent loop behavior.
-

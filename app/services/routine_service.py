@@ -11,6 +11,7 @@ from app.models.user import User
 from app.repositories import conversations as conversation_repository
 from app.repositories import routine_runs as routine_run_repository
 from app.repositories import routines as routine_repository
+from app.repositories import tool_action_logs as tool_action_log_repository
 from app.schemas.message import MessageCreate
 from app.schemas.routine import RoutineCreate, RoutineUpdate
 from app.services.agent_service import AgentNotFoundError, get_user_agent
@@ -100,6 +101,7 @@ async def run_user_routine(session: AsyncSession, *, user: User, routine_id: UUI
             user=user,
             conversation=conversation,
             payload=MessageCreate(content=routine.prompt),
+            routine_run_id=routine_run.id,
         )
         routine_run.status = RoutineRunStatus.SUCCEEDED
         routine_run.output = result.assistant_message.content
@@ -120,12 +122,48 @@ async def list_user_routine_runs(session: AsyncSession, *, user: User, routine_i
     return await routine_run_repository.list_runs_for_routine(session, user_id=user.id, routine_id=routine_id)
 
 
+async def get_user_routine_run(
+    session: AsyncSession,
+    *,
+    user: User,
+    routine_id: UUID,
+    run_id: UUID,
+) -> RoutineRun:
+    await get_user_routine(session, user=user, routine_id=routine_id)
+    routine_run = await routine_run_repository.get_run_for_routine(
+        session,
+        user_id=user.id,
+        routine_id=routine_id,
+        run_id=run_id,
+    )
+    if routine_run is None:
+        raise RoutineNotFoundError("Routine run not found.")
+    return routine_run
+
+
+async def list_user_routine_run_tool_logs(
+    session: AsyncSession,
+    *,
+    user: User,
+    routine_id: UUID,
+    run_id: UUID,
+):
+    await get_user_routine_run(session, user=user, routine_id=routine_id, run_id=run_id)
+    return await tool_action_log_repository.list_logs_for_routine_run(
+        session,
+        user_id=user.id,
+        routine_run_id=run_id,
+    )
+
+
 __all__ = [
     "AgentNotFoundError",
     "RoutineNotFoundError",
     "create_user_routine",
     "delete_user_routine",
     "get_user_routine",
+    "get_user_routine_run",
+    "list_user_routine_run_tool_logs",
     "list_user_routine_runs",
     "list_user_routines",
     "run_user_routine",

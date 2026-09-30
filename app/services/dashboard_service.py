@@ -3,7 +3,6 @@ from uuid import UUID
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.gmail import get_gmail_connection_status
 from app.models.agent import Agent
 from app.models.conversation import Conversation
 from app.models.enums import RoutineRunStatus, ToolActionStatus
@@ -21,6 +20,7 @@ from app.schemas.dashboard import (
     DashboardRecentRunsResponse,
     DashboardSummaryResponse,
 )
+from app.services.integration_service import list_user_integrations
 
 
 PREVIEW_LENGTH = 180
@@ -49,7 +49,7 @@ async def get_dashboard_summary(session: AsyncSession, *, user: User) -> Dashboa
         .where(RoutineRun.user_id == user.id, RoutineRun.status == RoutineRunStatus.FAILED),
     )
     pending_action_items_count = len(await build_action_items(session, user_id=user.id, limit=100))
-    gmail_status = await get_gmail_connection_status(user_id=user.id)
+    integrations = await list_user_integrations(session, user=user)
     last_run_at = await session.scalar(
         select(func.max(RoutineRun.started_at)).where(RoutineRun.user_id == user.id)
     )
@@ -61,7 +61,7 @@ async def get_dashboard_summary(session: AsyncSession, *, user: User) -> Dashboa
         succeeded_routine_runs_count=succeeded_runs_count,
         failed_routine_runs_count=failed_runs_count,
         pending_action_items_count=pending_action_items_count,
-        connected_integrations_count=1 if gmail_status["connected"] else 0,
+        connected_integrations_count=sum(1 for integration in integrations.integrations if integration.connected),
         last_run_at=last_run_at,
     )
 

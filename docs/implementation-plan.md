@@ -44,6 +44,19 @@ The backend should support:
 - Docker-based local setup
 - tests and API documentation
 
+## AI Engine V2 Preparation
+
+Before adding new AI orchestration packages, use [AI Engine V2 Design](./ai-engine-v2.md) as the implementation guide. V2 should evolve the current custom loop instead of replacing working API behavior in one large rewrite.
+
+Planned V2 sequence:
+
+1. Keep the OpenAI SDK LLM provider boundary.
+2. Introduce a typed agent run state.
+3. Split context loading, prompt building, model calling, tool routing, policy checks, and persistence into explicit steps.
+4. Improve prompt reliability for search, Gmail summary, memory, and draft flows.
+5. Add LangGraph only after approval, mapping existing steps into graph nodes. Status: started.
+6. Preserve existing API contracts and tests while refactoring.
+
 ## Recommended Folder Structure
 
 ```text
@@ -498,6 +511,59 @@ Done means:
 
 - project is ready for demo, deployment, and interview explanation
 
+## Milestone 13: AI Engine V2 Architecture
+
+Goal: prepare the next AI orchestration layer without breaking the MVP.
+
+Build:
+
+- typed agent run state
+- prompt block structure
+- model routing rules
+- explicit tool routing and policy nodes
+- better tool result normalization
+- optional LangGraph graph around the existing loop after dependency approval
+
+Tests:
+
+- search/current-data prompts trigger search tools
+- disabled tools cannot be called
+- confirmation-required tools do not execute unsafe actions
+- routine and chat runs share the same engine behavior
+- existing conversation response shape stays stable
+
+Done means:
+
+- the AI engine can be explained as a clear orchestration graph
+- LangGraph can be introduced safely if it adds value
+- interview explanation matches the actual backend code
+
+## Milestone 15: Integration System
+
+Goal: make external integrations safe, backend-owned, and frontend-ready.
+
+Build:
+
+- integration catalog and docs
+- user-scoped integration connection storage
+- list/status/connect/disconnect endpoints
+- frontend integration page connected to backend APIs
+- Composio-ready service boundary
+- safe integration tool behavior for disconnected providers
+
+Tests:
+
+- user ownership checks
+- connect/disconnect flow
+- integration status shape
+- tool not-connected behavior
+
+Done means:
+
+- the integration section is real backend functionality, not static frontend state
+- agents can use integration tools safely
+- future OAuth work can be added without changing the frontend contract
+
 ## API Build Order
 
 1. `GET /api/v1/health`
@@ -594,4 +660,3 @@ Start with Milestone 1:
 - add first tests
 
 Do not start auth, database, or agent loop until the backend foundation is stable.
-

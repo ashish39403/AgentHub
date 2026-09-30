@@ -1,7 +1,9 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../lib/auth-context';
+import { api } from '../../lib/api-client';
 import {
   LayoutGrid,
   Cpu,
@@ -23,6 +25,10 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [profileMenuOpen, setProfileMenuOpen] = React.useState(false);
+  const { data: recentAgents = [] } = useQuery({
+    queryKey: ['agents-list'],
+    queryFn: () => api.getAgents(),
+  });
 
   const mainNav = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
@@ -30,11 +36,6 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
     { name: 'Routines', path: '/routines', icon: Clock },
     { name: 'Integrations', path: '/integrations', icon: Puzzle },
     { name: 'Settings', path: '/settings', icon: Sliders },
-  ];
-
-  const recentAgents = [
-    { name: 'Internship Scout', id: 'agent_scout_01', time: '4m' },
-    { name: 'Inbox Summarizer', id: 'agent_inbox_02', time: '12m' },
   ];
 
   return (
@@ -109,7 +110,7 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
             </button>
           </div>
           <div className="flex flex-col gap-0.5">
-            {recentAgents.map((agent) => (
+            {recentAgents.slice(0, 4).map((agent) => (
               <button
                 key={agent.id}
                 onClick={() => {
@@ -121,10 +122,13 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a] shrink-0" />
                 <span className="truncate flex-1 font-medium">{agent.name}</span>
                 <span className="font-mono text-[11px] text-[#9ca3af] group-hover:text-[#4b5563]">
-                  {agent.time}
+                  {agent.status}
                 </span>
               </button>
             ))}
+            {recentAgents.length === 0 && (
+              <div className="px-2.5 py-1.5 text-xs text-[#6b7280]">No agents yet</div>
+            )}
           </div>
         </div>
       </div>
@@ -165,7 +169,7 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative shrink-0">
               <img
-                src={user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
+                src={user?.avatar_url || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.name || 'User')}`}
                 alt={user?.name || 'User Profile'}
                 className="w-8 h-8 rounded-full object-cover border border-[#e5e7eb]"
                 referrerPolicy="no-referrer"
@@ -174,10 +178,10 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
             </div>
             <div className="flex flex-col min-w-0">
               <span className="text-xs font-semibold text-[#111827] truncate leading-tight">
-                {user?.name || 'Elena Vance'}
+                {user?.name || 'Signed in user'}
               </span>
               <span className="text-[11px] font-mono text-[#6b7280] truncate leading-tight">
-                {user?.email || 'elena@agenthub.dev'}
+                {user?.email || 'No email'}
               </span>
             </div>
           </div>

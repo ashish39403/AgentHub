@@ -21,8 +21,10 @@ AGENT_MAX_ITERATIONS=4
 AICREDITS_BASE_URL=<openai-compatible-base-url>
 AICREDITS_API_KEY=<secret>
 COMPOSIO_API_KEY=<secret-when-enabled>
-SERPAPI_API_KEY=<secret-when-enabled>
-TAVILY_API_KEY=<secret-when-enabled>
+SERPER_API_KEY=<primary-search-key-if-using-serper>
+SERPAPI_API_KEY=<primary-search-key-if-using-serpapi>
+TAVILY_API_KEY=<optional-fallback-after-weak-primary-search-results>
+ENABLE_TAVILY_FALLBACK=false
 ```
 
 ## Local Docker Run

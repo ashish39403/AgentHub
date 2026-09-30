@@ -197,6 +197,14 @@ The frontend is out of scope for this repository, but APIs should support these 
 9. Repeat until the LLM returns a final response or max iterations is reached.
 10. Save final message or routine run output.
 
+## AI Engine V2 Direction
+
+The current MVP uses a custom OpenAI SDK based agent loop. AI Engine V2 should keep the same product behavior but make orchestration more explicit and easier to explain in interviews.
+
+V2 should introduce a typed run state, clearer prompt blocks, stricter tool routing, and an optional LangGraph layer after the design is accepted. The existing tool registry, enabled-tool checks, action policy, and user ownership rules remain backend-owned and should not be delegated to the LLM.
+
+Detailed V2 architecture, diagrams, request flow, and implementation phases are documented in [AI Engine V2 Design](./ai-engine-v2.md).
+
 ## Tool Categories
 
 ### Internal MVP Tools
@@ -232,4 +240,3 @@ The frontend is out of scope for this repository, but APIs should support these 
 - External tokens must never be returned to the frontend.
 - Secrets must never be logged.
 - Dangerous tool actions require explicit user configuration or confirmation.
-

@@ -8,6 +8,8 @@ class AgentCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     instructions: str = Field(min_length=10, max_length=8000)
     objective: str = Field(min_length=10, max_length=4000)
+    model: str | None = Field(default=None, min_length=1, max_length=160)
+    temperature: float | None = Field(default=None, ge=0, le=1)
     enabled_tools: list[str] | None = Field(default=None, max_length=10)
 
 
@@ -15,6 +17,8 @@ class AgentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     instructions: str | None = Field(default=None, min_length=10, max_length=8000)
     objective: str | None = Field(default=None, min_length=10, max_length=4000)
+    model: str | None = Field(default=None, min_length=1, max_length=160)
+    temperature: float | None = Field(default=None, ge=0, le=1)
     enabled_tools: list[str] | None = Field(default=None, max_length=10)
 
 
@@ -26,6 +30,8 @@ class AgentResponse(BaseModel):
     name: str
     instructions: str
     objective: str
+    model: str
+    temperature: float
     enabled_tools: list[str]
     created_at: datetime
     updated_at: datetime

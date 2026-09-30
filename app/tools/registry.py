@@ -48,14 +48,14 @@ class ToolRegistry:
         self._definitions: dict[str, ToolDefinition] = {
             "datetime": ToolDefinition(
                 name="datetime",
-                description="Return the current UTC date and time.",
+                description="Use when the user asks for the current date, current time, timezone, or schedule timing. Returns current UTC datetime.",
                 category="internal",
                 safety_level="safe",
                 parameters={"type": "object", "properties": {}, "additionalProperties": False},
             ),
             "web_search": ToolDefinition(
                 name="web_search",
-                description="Search the web using SerpAPI first, rewrite weak queries, then use Tavily fallback.",
+                description="Use when the user asks to search the web, find latest opportunities, research internships, or gather current external information. Uses Serper first, then SerpAPI if Serper is not configured. Tavily fallback is disabled by default and only runs when ENABLE_TAVILY_FALLBACK is true.",
                 category="search",
                 safety_level="read_only",
                 parameters={
@@ -69,7 +69,7 @@ class ToolRegistry:
             ),
             "summarize_text": ToolDefinition(
                 name="summarize_text",
-                description="Create a short deterministic summary of provided text.",
+                description="Use when the user provides text and asks to summarize, shorten, extract key points, or create a brief.",
                 category="internal",
                 safety_level="safe",
                 parameters={
@@ -80,7 +80,7 @@ class ToolRegistry:
             ),
             "save_memory": ToolDefinition(
                 name="save_memory",
-                description="Save a useful note/report for this agent.",
+                description="Use when the user asks to save, remember, store, or persist a useful note/report for this agent.",
                 category="memory",
                 safety_level="safe",
                 parameters={
@@ -95,14 +95,14 @@ class ToolRegistry:
             ),
             "get_memory": ToolDefinition(
                 name="get_memory",
-                description="Fetch saved notes/reports for this agent.",
+                description="Use when the user asks what is saved, remembered, stored, or wants previous notes/reports for this agent.",
                 category="memory",
                 safety_level="read_only",
                 parameters={"type": "object", "properties": {"limit": {"type": "integer"}}},
             ),
             "draft_message": ToolDefinition(
                 name="draft_message",
-                description="Draft a message without sending it.",
+                description="Use when the user asks to draft/write a message, email, LinkedIn note, reminder, or reply. This only creates a draft and never sends it.",
                 category="action",
                 safety_level="write_draft",
                 parameters={
@@ -117,7 +117,7 @@ class ToolRegistry:
             ),
             "send_slack_message": ToolDefinition(
                 name="send_slack_message",
-                description="Prepare a Slack send action. Actual sending requires confirmation.",
+                description="Use when the user asks to send or prepare a Slack message. This prepares the action only; actual sending requires explicit confirmation.",
                 category="action",
                 safety_level="external_action",
                 requires_confirmation=True,
@@ -129,14 +129,14 @@ class ToolRegistry:
             ),
             "gmail_summary": ToolDefinition(
                 name="gmail_summary",
-                description="Summarize Gmail messages after Gmail is connected.",
+                description="Use when the user asks to summarize Gmail, rank important emails, triage inbox, or extract email action items. Read-only; cannot send or delete emails.",
                 category="integration",
                 safety_level="read_only",
                 parameters={"type": "object", "properties": {"max_emails": {"type": "integer"}}},
             ),
             "notion_create_page": ToolDefinition(
                 name="notion_create_page",
-                description="Create a Notion page after Notion is connected.",
+                description="Use when the user asks to create or prepare a Notion page. This prepares the action only and requires confirmation.",
                 category="integration",
                 safety_level="external_action",
                 requires_confirmation=True,
@@ -148,7 +148,7 @@ class ToolRegistry:
             ),
             "github_issue_search": ToolDefinition(
                 name="github_issue_search",
-                description="Search GitHub issues after GitHub integration is configured.",
+                description="Use when the user asks to search GitHub issues, repository tasks, bugs, or open issues.",
                 category="integration",
                 safety_level="read_only",
                 parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, mockDb } from '../../lib/api-client';
+import { api } from '../../lib/api-client';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
@@ -49,6 +49,19 @@ export function DashboardPage() {
     queryFn: () => api.getActionItems(),
   });
 
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents-list'],
+    queryFn: () => api.getAgents(),
+  });
+
+  const { data: routines = [] } = useQuery({
+    queryKey: ['routines-list'],
+    queryFn: () => api.getRoutines(),
+  });
+
+  const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
+  const routineById = useMemo(() => new Map(routines.map((routine) => [routine.id, routine])), [routines]);
+
   // Dismiss Action item mutation
   const dismissMutation = useMutation({
     mutationFn: (id: string) => api.dismissActionItem(id),
@@ -74,8 +87,8 @@ export function DashboardPage() {
     const q = searchFilter.toLowerCase();
     return recentRuns.filter(
       (run) => {
-        const routine = mockDb.routines.find((r) => r.id === run.routine_id);
-        const agent = mockDb.agents.find((a) => a.id === run.agent_id);
+        const routine = routineById.get(run.routine_id);
+        const agent = agentById.get(run.agent_id);
         return (
           routine?.name.toLowerCase().includes(q) ||
           agent?.name.toLowerCase().includes(q) ||
@@ -84,7 +97,7 @@ export function DashboardPage() {
         );
       }
     );
-  }, [recentRuns, searchFilter]);
+  }, [recentRuns, searchFilter, routineById, agentById]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] mx-auto w-full space-y-6 lg:space-y-8 animate-in fade-in duration-200">
@@ -137,18 +150,17 @@ export function DashboardPage() {
             <span className="text-[11px] font-mono text-[#6b7280]">Last 24 hours</span>
           </div>
           <div className="space-y-1 text-xs font-mono text-[#4b5563]">
-            <div className="flex items-center justify-between py-1 border-b border-[#f3f4f6]">
-              <span>[09:14:02 UTC] Routine "Internship Scout Live Run" triggered by Elena Vance</span>
-              <span className="text-[#16a34a]">200 OK</span>
-            </div>
-            <div className="flex items-center justify-between py-1 border-b border-[#f3f4f6]">
-              <span>[08:01:24 UTC] Routine "Morning inbox digest" completed (1m 24s)</span>
-              <span className="text-[#16a34a]">200 OK</span>
-            </div>
-            <div className="flex items-center justify-between py-1">
-              <span>[Yesterday 09:00 UTC] Routine "Weekly internship report" rate limited</span>
-              <span className="text-[#dc2626]">429 TOO MANY REQUESTS</span>
-            </div>
+            {(recentRuns || []).slice(0, 3).map((run) => (
+              <div key={run.id} className="flex items-center justify-between py-1 border-b border-[#f3f4f6] last:border-b-0">
+                <span>
+                  [{formatRelativeTime(run.started_at)}] {routineById.get(run.routine_id)?.name || 'Routine'} {run.status}
+                </span>
+                <span className={run.status === 'failed' ? 'text-[#dc2626]' : 'text-[#16a34a]'}>
+                  {run.status.toUpperCase()}
+                </span>
+              </div>
+            ))}
+            {!recentRuns?.length && <div className="py-1 text-[#6b7280]">No routine runs recorded yet.</div>}
           </div>
         </div>
       )}
@@ -164,11 +176,11 @@ export function DashboardPage() {
           <div className="flex items-baseline justify-between mt-auto">
             <div>
               <div className="text-3xl font-semibold text-[#111827] tracking-tight leading-none mb-1.5">
-                {isSummaryLoading ? <Skeleton className="h-8 w-12" /> : summary?.active_agents_count ?? 2}
+                {isSummaryLoading ? <Skeleton className="h-8 w-12" /> : summary?.active_agents_count ?? 0}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-[#0f766e] font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a]" />
-                <span>{summary?.healthy_agents_count ?? 2} healthy</span>
+                <span>{summary?.healthy_agents_count ?? 0} healthy</span>
               </div>
             </div>
             <div className="flex items-center gap-1 text-[11px] font-mono bg-[#f0fdfa] text-[#0f766e] px-1.5 py-0.5 rounded border border-[#99f6e4]">
@@ -186,12 +198,12 @@ export function DashboardPage() {
           <div className="flex items-baseline justify-between mt-auto">
             <div>
               <div className="text-3xl font-semibold text-[#111827] tracking-tight leading-none mb-1.5">
-                {isSummaryLoading ? <Skeleton className="h-8 w-12" /> : summary?.active_routines_count ?? 4}
+                {isSummaryLoading ? <Skeleton className="h-8 w-12" /> : summary?.active_routines_count ?? 0}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-[#4b5563]">
                 <Clock className="w-3.5 h-3.5 text-[#6b7280]" />
                 <span>
-                  Next run in <span className="font-mono text-[#111827] font-medium">{summary?.next_routine_in_minutes ?? 42}m</span>
+                  Next run in <span className="font-mono text-[#111827] font-medium">{summary?.next_routine_in_minutes ?? 0}m</span>
                 </span>
               </div>
             </div>
@@ -214,11 +226,11 @@ export function DashboardPage() {
           <div className="flex items-baseline justify-between mt-auto">
             <div>
               <div className="text-3xl font-semibold text-[#111827] tracking-tight leading-none mb-1.5">
-                {isSummaryLoading ? <Skeleton className="h-8 w-16" /> : summary?.runs_this_week_count ?? 148}
+                {isSummaryLoading ? <Skeleton className="h-8 w-16" /> : summary?.runs_this_week_count ?? 0}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-[#16a34a] font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{summary?.success_rate_percentage ?? 98.6}% success rate</span>
+                <span>{summary?.success_rate_percentage ?? 100}% success rate</span>
               </div>
             </div>
             {/* Line Chart Sparkline */}
@@ -238,7 +250,7 @@ export function DashboardPage() {
           <div className="flex items-baseline justify-between mt-auto">
             <div>
               <div className="text-3xl font-semibold text-[#dc2626] tracking-tight leading-none mb-1.5">
-                {isSummaryLoading ? <Skeleton className="h-8 w-8" /> : summary?.failed_runs_count ?? 2}
+                {isSummaryLoading ? <Skeleton className="h-8 w-8" /> : summary?.failed_runs_count ?? 0}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-[#dc2626] font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#dc2626]" />
@@ -339,7 +351,7 @@ export function DashboardPage() {
                         size="sm"
                         onClick={() => {
                           if (item.action_label === 'Retry') {
-                            retryMutation.mutate('rtn_weekly_scout');
+                            toast.info('Open the related run to retry from details.');
                           } else {
                             navigate(item.target_url!);
                           }
@@ -417,8 +429,8 @@ export function DashboardPage() {
                 </tr>
               ) : (
                 filteredRuns.map((run) => {
-                  const routine = mockDb.routines.find((r) => r.id === run.routine_id);
-                  const agent = mockDb.agents.find((a) => a.id === run.agent_id);
+                  const routine = routineById.get(run.routine_id);
+                  const agent = agentById.get(run.agent_id);
 
                   return (
                     <TableRow key={run.id}>
@@ -453,7 +465,7 @@ export function DashboardPage() {
                           ) : (
                             <>
                               <Calendar className="w-3 h-3 text-[#6b7280]" />
-                              <span>{routine?.schedule.includes('0 8') ? '08:00 UTC' : routine?.schedule.includes('0 9') ? 'Mon 09:00' : 'Hourly'}</span>
+                              <span>{routine?.schedule || 'Scheduled'}</span>
                             </>
                           )}
                         </div>
@@ -517,7 +529,7 @@ export function DashboardPage() {
         {/* Table Footer Pagination Bar */}
         <div className="px-4 py-2.5 bg-[#f9fafb] border-t border-[#e5e7eb] flex items-center justify-between">
           <span className="font-mono text-[11px] text-[#6b7280]">
-            Showing {filteredRuns.length} of {summary?.runs_this_week_count ?? 148} runs this week
+            Showing {filteredRuns.length} of {summary?.runs_this_week_count ?? recentRuns?.length ?? 0} runs this week
           </span>
           <div className="flex items-center gap-1 text-xs">
             <button

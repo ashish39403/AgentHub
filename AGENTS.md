@@ -25,6 +25,7 @@ We are not building a complete general-purpose agent platform in one pass. We ar
 - Auth: JWT access and refresh tokens, pwdlib
 - LLM: OpenAI SDK with AICredits/OpenAI-compatible base URLs
 - Tools: internal tools first, Composio later
+- AI Engine V2: LangGraph orchestration over backend-owned tools, policy, and persistence
 - Scheduler: APScheduler for MVP
 - Browser VM: E2B later, not MVP
 - Testing: Pytest and HTTPX
@@ -42,10 +43,11 @@ We are not building a complete general-purpose agent platform in one pass. We ar
 8. Use the official OpenAI Python SDK for OpenAI-compatible LLM calls instead of custom raw HTTP clients.
 9. Prefer simple explicit code over heavy abstractions.
 10. Do not use LangChain or heavy agent frameworks for the MVP agent loop.
-11. Every user-owned resource must be scoped by `user_id`.
-12. Sensitive actions such as sending messages, sending emails, deleting emails, or applying to internships must require explicit user configuration or confirmation.
-13. Routine runs and tool actions must be logged.
-14. APIs should be frontend-ready, stable, and documented.
+11. For AI Engine V2, keep LangGraph orchestration thin; backend-owned code must still enforce tools, policy, ownership, and persistence.
+12. Every user-owned resource must be scoped by `user_id`.
+13. Sensitive actions such as sending messages, sending emails, deleting emails, or applying to internships must require explicit user configuration or confirmation.
+14. Routine runs and tool actions must be logged.
+15. APIs should be frontend-ready, stable, and documented.
 
 ## Safety Rules
 

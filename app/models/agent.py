@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
@@ -15,6 +15,8 @@ class Agent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     objective: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(String(160), default="google/gemini-2.5-flash", nullable=False)
+    temperature: Mapped[float] = mapped_column(Float, default=0.2, nullable=False)
     enabled_tools: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="agents")

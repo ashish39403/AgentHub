@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Select } from '../../components/ui/Select';
 import { Textarea } from '../../components/ui/Textarea';
 import { useToast } from '../../components/ui/Toast';
-import { api, mockDb } from '../../lib/api-client';
+import { api } from '../../lib/api-client';
 import { Play, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,11 +15,22 @@ interface QuickRunModalProps {
 }
 
 export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
-  const [selectedAgentId, setSelectedAgentId] = useState(mockDb.agents[0]?.id || '');
+  const [selectedAgentId, setSelectedAgentId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents-list'],
+    queryFn: () => api.getAgents(),
+    enabled: isOpen,
+  });
+
+  useEffect(() => {
+    if (!selectedAgentId && agents.length > 0) {
+      setSelectedAgentId(agents[0].id);
+    }
+  }, [agents, selectedAgentId]);
 
   const handleRun = async () => {
     if (!selectedAgentId) {
@@ -77,7 +89,7 @@ export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
           label="Target Autonomous Agent"
           value={selectedAgentId}
           onChange={(e) => setSelectedAgentId(e.target.value)}
-          options={mockDb.agents.map((a) => ({
+          options={agents.map((a) => ({
             value: a.id,
             label: `${a.name} (${a.tools.length} tools attached)`,
           }))}

@@ -16,6 +16,7 @@ import {
   AuthResponse,
   ApiErrorResponse,
   ToolCallPayload,
+  ToolDefinition,
 } from '../types';
 import {
   initialAgents,
@@ -69,7 +70,7 @@ export const tokenStorage = {
   },
 };
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 const API_PREFIX = `${BASE_URL}/api/v1`;
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
 const FALLBACK_TO_MOCKS = import.meta.env.VITE_FALLBACK_TO_MOCKS === 'true';
@@ -284,6 +285,7 @@ const backendToFrontendTool: Record<string, string> = {
 };
 
 const frontendToBackendTool: Record<string, string> = {
+  internship_research: 'web_search',
   date_time: 'datetime',
   gmail_read: 'gmail_summary',
   slack_notify: 'send_slack_message',
@@ -307,7 +309,7 @@ function normalizeAgent(raw: any): Agent {
     name: raw.name,
     objective: raw.objective,
     instructions: raw.instructions,
-    model: raw.model || 'gemini-2.5-flash',
+    model: raw.model || 'google/gemini-2.5-flash',
     temperature: raw.temperature ?? 0.2,
     tools,
     version: raw.version || 'v1.0',
@@ -322,6 +324,8 @@ function toBackendAgentPayload(input: AgentCreateInput | AgentUpdateInput): Reco
     name: input.name,
     objective: input.objective,
     instructions: input.instructions,
+    model: input.model,
+    temperature: input.temperature,
     enabled_tools: input.tools?.map(normalizeToolNameForBackend),
   };
 }
@@ -453,12 +457,30 @@ function normalizeIntegration(raw: any): Integration {
     name: raw.name || `${String(raw.provider || 'gmail').toUpperCase()} Integration`,
     provider: raw.provider || 'gmail',
     description: raw.description || raw.message || 'External integration status.',
-    status: connected ? 'connected' : raw.configured ? 'disconnected' : 'disconnected',
+    status: connected ? 'connected' : raw.status || 'disconnected',
     scopes: raw.scopes || [],
     icon: raw.icon || raw.provider || 'gmail',
     account_email: raw.account_email,
     last_synced_at: raw.last_synced_at,
     expires_at: raw.expires_at,
+    configured: Boolean(raw.configured),
+    connected,
+    message: raw.message,
+    connect_url: raw.connect_url,
+  };
+}
+
+function normalizeToolDefinition(raw: any): ToolDefinition {
+  return {
+    id: raw.name || raw.id,
+    name: normalizeToolNameForFrontend(raw.name || raw.id),
+    displayName: raw.displayName || raw.display_name || raw.name || raw.id,
+    description: raw.description || 'Tool available to agents.',
+    category: raw.category || 'system',
+    requiredPermissions: raw.requiredPermissions || raw.required_permissions || [],
+    isBuiltIn: raw.isBuiltIn ?? raw.is_built_in ?? true,
+    safety_level: raw.safety_level,
+    requires_confirmation: Boolean(raw.requires_confirmation),
   };
 }
 
@@ -532,7 +554,7 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
       name: body.name,
       objective: body.objective,
       instructions: body.instructions,
-      model: body.model || 'gemini-2.5-flash',
+        model: body.model || 'google/gemini-2.5-flash',
       temperature: body.temperature ?? 0.7,
       tools: body.tools || [],
       version: 'v1.0',
@@ -739,6 +761,22 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
     return mockDb.integrations as unknown as T;
   }
 
+  const integrationActionMatch = endpoint.match(/^\/integrations\/([^/]+)\/(connect|disconnect)$/);
+  if (integrationActionMatch) {
+    const provider = integrationActionMatch[1];
+    const action = integrationActionMatch[2];
+    const intItem = mockDb.integrations.find((i) => i.provider === provider || i.id === provider);
+    if (!intItem) throw new ApiError('Integration not found', 'NOT_FOUND', 404);
+    intItem.status = action === 'connect' ? 'pending' : 'disconnected';
+    intItem.connected = false;
+    intItem.message =
+      action === 'connect'
+        ? 'Mock connection requested. Complete OAuth before agents can use this provider.'
+        : 'Mock integration disconnected.';
+    mockDb.save();
+    return intItem as unknown as T;
+  }
+
   const integrationMatch = endpoint.match(/^\/integrations\/([^/]+)$/);
   if (integrationMatch) {
     const intId = integrationMatch[1];
@@ -762,6 +800,11 @@ export const api = {
     request<unknown>('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }).then(normalizeAuthResponse),
   register: (data: { name: string; email: string; password?: string }) =>
     request<unknown>('/auth/register', { method: 'POST', body: JSON.stringify(data) }).then(normalizeAuthResponse),
+  refreshSession: (refreshToken: string) =>
+    request<unknown>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    }).then(normalizeAuthResponse),
   getMe: () => request<unknown>('/auth/me').then(normalizeUser),
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
 
@@ -815,6 +858,8 @@ export const api = {
     }).then(normalizeConversation),
   getConversation: (conversationId: string): Promise<Conversation & { messages: Message[] }> =>
     request<unknown>(`/conversations/${conversationId}`).then(normalizeConversationDetail),
+  deleteConversation: (conversationId: string) =>
+    request<void>(`/conversations/${conversationId}`, { method: 'DELETE' }),
   sendMessage: (conversationId: string, content: string) =>
     request<any>(`/conversations/${conversationId}/runs`, {
       method: 'POST',
@@ -841,18 +886,31 @@ export const api = {
     request<any>(`/routines/${routineId}/runs`).then((raw) =>
       (Array.isArray(raw) ? raw : raw.runs || []).map(normalizeRoutineRun)
     ),
+  getRoutineRun: (routineId: string, runId: string) =>
+    request<unknown>(`/routines/${routineId}/runs/${runId}`).then(normalizeRoutineRun),
 
   // Tool Logs & Run Details
-  getToolLogsForRun: (runId: string) => {
-    return Promise.resolve(mockDb.toolLogs.filter((t) => t.routine_run_id === runId));
-  },
+  getToolLogsForRun: (routineId: string, runId: string): Promise<ToolActionLog[]> =>
+    request<any>(`/routines/${routineId}/runs/${runId}/tool-logs`).then((raw) =>
+      (Array.isArray(raw) ? raw : raw.tool_logs || []).map((log: any) => ({
+        ...log,
+        id: String(log.id),
+        agent_id: String(log.agent_id),
+        routine_run_id: log.routine_run_id ? String(log.routine_run_id) : null,
+      }))
+    ),
+  getTools: (): Promise<ToolDefinition[]> =>
+    request<any>('/tools').then((raw) => (Array.isArray(raw) ? raw : raw.tools || []).map(normalizeToolDefinition)),
 
   // Integrations
   getIntegrations: () =>
-    request<unknown>('/integrations/gmail/status').then((gmailStatus) => [
-      normalizeIntegration(gmailStatus),
-      ...initialIntegrations.filter((integration) => integration.provider !== 'gmail'),
-    ]),
+    request<any>('/integrations').then((raw) =>
+      (Array.isArray(raw) ? raw : raw.integrations || []).map(normalizeIntegration)
+    ),
+  connectIntegration: (provider: string) =>
+    request<unknown>(`/integrations/${provider}/connect`, { method: 'POST' }).then(normalizeIntegration),
+  disconnectIntegration: (provider: string) =>
+    request<unknown>(`/integrations/${provider}/disconnect`, { method: 'POST' }).then(normalizeIntegration),
   updateIntegration: (id: string, patch: Partial<Integration>) =>
     request<Integration>(`/integrations/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 };
@@ -986,7 +1044,12 @@ The full synthesis report has been formatted and stored in the workspace registr
         }
       });
       const assistantMessage = normalizeMessage(data.assistant_message || data);
-      onToken(assistantMessage.content);
+      const chunks = assistantMessage.content.match(/.{1,140}(?:\s|$)/g) || [assistantMessage.content];
+      for (const chunk of chunks) {
+        if (signal?.aborted) return;
+        await new Promise((resolve) => setTimeout(resolve, 35));
+        onToken(chunk);
+      }
       onComplete(assistantMessage);
       return;
     }

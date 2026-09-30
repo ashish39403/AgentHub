@@ -18,64 +18,12 @@ class LLMClient(Protocol):
         pass
 
 
-class MockLLMClient:
-    """Deterministic local LLM stand-in until AICredits credentials are configured."""
-
-    async def complete(
-        self,
-        *,
-        messages: list[AgentRuntimeMessage],
-        tools: list[ToolDefinition],
-    ) -> LLMResponse:
-        last_message = messages[-1]
-
-        if last_message.role == "tool":
-            return LLMResponse(content=f"I used {last_message.name} and found this result: {last_message.content}")
-
-        latest_user_message = next((message for message in reversed(messages) if message.role == "user"), None)
-        if latest_user_message is None:
-            return LLMResponse(content="I need a user message before I can help.")
-
-        content = latest_user_message.content.lower()
-        available_tool_names = {tool.name for tool in tools}
-
-        if ("gmail" in content or "email" in content) and "gmail_summary" in available_tool_names:
-            return LLMResponse(tool_call=ToolCall(name="gmail_summary", arguments={"max_emails": 5}))
-
-        if ("slack" in content and "send" in content) and "send_slack_message" in available_tool_names:
-            return LLMResponse(
-                tool_call=ToolCall(
-                    name="send_slack_message",
-                    arguments={
-                        "channel": "#general",
-                        "message": latest_user_message.content,
-                    },
-                )
-            )
-
-        if ("draft" in content or "message" in content or "remind" in content) and "draft_message" in available_tool_names:
-            return LLMResponse(
-                tool_call=ToolCall(
-                    name="draft_message",
-                    arguments={
-                        "recipient": "there",
-                        "purpose": latest_user_message.content,
-                        "tone": "professional",
-                    },
-                )
-            )
-
-        if ("time" in content or "date" in content) and "datetime" in available_tool_names:
-            return LLMResponse(tool_call=ToolCall(name="datetime", arguments={}))
-
-        return LLMResponse(content=f"{latest_user_message.content}")
-
-
 class AICreditsLLMClient:
-    def __init__(self, *, model: str | None = None) -> None:
+    def __init__(self, *, model: str | None = None, temperature: float = 0.2) -> None:
         if not settings.aicredits_base_url or not settings.aicredits_api_key:
             raise RuntimeError("AICredits is selected, but AICREDITS_BASE_URL or AICREDITS_API_KEY is missing.")
         self.model = model or settings.llm_model_default
+        self.temperature = temperature
         self.client = AsyncOpenAI(
             api_key=settings.aicredits_api_key,
             base_url=settings.aicredits_base_url.rstrip("/"),
@@ -93,7 +41,7 @@ class AICreditsLLMClient:
                 messages=format_messages_for_chat_completion(messages),
                 tools=[format_tool_for_chat_completion(tool) for tool in tools] or None,
                 tool_choice="auto" if tools else None,
-                temperature=0.2,
+                temperature=self.temperature,
             )
         except OpenAIError as exc:
             raise RuntimeError(f"AICredits request failed: {exc}") from exc
@@ -144,7 +92,8 @@ def parse_tool_arguments(raw_arguments: str | dict[str, Any] | None) -> dict[str
     return parsed if isinstance(parsed, dict) else {}
 
 
-def get_llm_client() -> LLMClient:
-    if settings.llm_provider == "aicredits":
-        return AICreditsLLMClient()
-    return MockLLMClient()
+def get_llm_client(*, model: str | None = None, temperature: float = 0.2) -> LLMClient:
+    provider = settings.llm_provider.strip().lower()
+    if provider == "aicredits":
+        return AICreditsLLMClient(model=model, temperature=temperature)
+    raise RuntimeError("LLM_PROVIDER must be set to 'aicredits' for runtime LLM calls.")

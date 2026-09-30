@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { useNavigate } from 'react-router-dom';
-import { mockDb } from '../../lib/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../lib/api-client';
 import { Search, Cpu, Clock, Play, ArrowRight } from 'lucide-react';
 
 interface CommandPaletteProps {
@@ -13,6 +14,16 @@ interface CommandPaletteProps {
 export function CommandPalette({ isOpen, onClose, onQuickRun }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
+  const { data: allAgents = [] } = useQuery({
+    queryKey: ['agents-list'],
+    queryFn: () => api.getAgents(),
+    enabled: isOpen,
+  });
+  const { data: allRoutines = [] } = useQuery({
+    queryKey: ['routines-list'],
+    queryFn: () => api.getRoutines(),
+    enabled: isOpen,
+  });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -27,11 +38,11 @@ export function CommandPalette({ isOpen, onClose, onQuickRun }: CommandPalettePr
 
   if (!isOpen) return null;
 
-  const agents = mockDb.agents.filter((a) =>
+  const agents = allAgents.filter((a) =>
     a.name.toLowerCase().includes(query.toLowerCase()) || a.objective.toLowerCase().includes(query.toLowerCase())
   );
 
-  const routines = mockDb.routines.filter((r) =>
+  const routines = allRoutines.filter((r) =>
     r.name.toLowerCase().includes(query.toLowerCase()) || r.prompt.toLowerCase().includes(query.toLowerCase())
   );
 

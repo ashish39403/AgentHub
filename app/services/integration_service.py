@@ -1,8 +1,204 @@
-from app.integrations.gmail import get_gmail_connection_status
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.integrations.composio_client import get_composio_client
+from app.models.enums import IntegrationConnectionStatus, IntegrationProvider
+from app.models.integration_connection import IntegrationConnection
 from app.models.user import User
-from app.schemas.integration import IntegrationStatusResponse
+from app.repositories import integration_connections as integration_repository
+from app.schemas.integration import IntegrationListResponse, IntegrationResponse, IntegrationStatusResponse
 
 
-async def get_user_gmail_status(*, user: User) -> IntegrationStatusResponse:
-    status = await get_gmail_connection_status(user_id=user.id)
-    return IntegrationStatusResponse(**status)
+@dataclass(frozen=True)
+class IntegrationDefinition:
+    provider: IntegrationProvider
+    name: str
+    description: str
+    scopes: list[str]
+    icon: str
+
+
+INTEGRATION_CATALOG: dict[IntegrationProvider, IntegrationDefinition] = {
+    IntegrationProvider.GMAIL: IntegrationDefinition(
+        provider=IntegrationProvider.GMAIL,
+        name="Gmail",
+        description="Read recent emails, summarize inbox activity, rank important messages, and extract action items.",
+        scopes=["gmail.readonly"],
+        icon="gmail",
+    ),
+    IntegrationProvider.NOTION: IntegrationDefinition(
+        provider=IntegrationProvider.NOTION,
+        name="Notion",
+        description="Prepare workspace pages for agent reports and saved research outputs.",
+        scopes=["notion.pages.write"],
+        icon="notion",
+    ),
+    IntegrationProvider.GITHUB: IntegrationDefinition(
+        provider=IntegrationProvider.GITHUB,
+        name="GitHub",
+        description="Search repositories and issues for engineering workflow context.",
+        scopes=["github.read"],
+        icon="github",
+    ),
+}
+
+
+class UnknownIntegrationProviderError(ValueError):
+    pass
+
+
+async def list_user_integrations(session: AsyncSession, *, user: User) -> IntegrationListResponse:
+    connections = await integration_repository.list_connections_for_user(session, user.id)
+    connections_by_provider = {connection.provider: connection for connection in connections}
+    return IntegrationListResponse(
+        integrations=[
+            build_integration_response(definition, connections_by_provider.get(provider))
+            for provider, definition in INTEGRATION_CATALOG.items()
+        ]
+    )
+
+
+async def get_user_integration_status(
+    session: AsyncSession,
+    *,
+    user: User,
+    provider: str,
+) -> IntegrationStatusResponse:
+    integration_provider = parse_provider(provider)
+    definition = INTEGRATION_CATALOG[integration_provider]
+    connection = await integration_repository.get_connection_for_user(
+        session,
+        user_id=user.id,
+        provider=integration_provider,
+    )
+    return IntegrationStatusResponse(**build_integration_response(definition, connection).model_dump())
+
+
+async def get_provider_status_dict(session: AsyncSession, *, user_id: UUID, provider: str) -> dict:
+    integration_provider = parse_provider(provider)
+    definition = INTEGRATION_CATALOG[integration_provider]
+    connection = await integration_repository.get_connection_for_user(
+        session,
+        user_id=user_id,
+        provider=integration_provider,
+    )
+    return build_integration_response(definition, connection).model_dump(mode="json")
+
+
+async def connect_user_integration(
+    session: AsyncSession,
+    *,
+    user: User,
+    provider: str,
+) -> IntegrationStatusResponse:
+    integration_provider = parse_provider(provider)
+    definition = INTEGRATION_CATALOG[integration_provider]
+    connection_request = await get_composio_client().create_connection_request(
+        user_id=str(user.id),
+        provider=integration_provider.value,
+    )
+
+    status = (
+        IntegrationConnectionStatus.PENDING
+        if connection_request.configured
+        else IntegrationConnectionStatus.DISCONNECTED
+    )
+    connection = await integration_repository.upsert_connection(
+        session,
+        user_id=user.id,
+        provider=integration_provider,
+        status=status,
+        scopes=definition.scopes,
+        external_connection_id=connection_request.external_connection_id,
+        metadata={
+            "connect_url": connection_request.connect_url,
+            "message": connection_request.message,
+            "requested_at": datetime.now(UTC).isoformat(),
+        },
+    )
+    await session.commit()
+    await session.refresh(connection)
+    return IntegrationStatusResponse(**build_integration_response(definition, connection).model_dump())
+
+
+async def disconnect_user_integration(
+    session: AsyncSession,
+    *,
+    user: User,
+    provider: str,
+) -> IntegrationStatusResponse:
+    integration_provider = parse_provider(provider)
+    definition = INTEGRATION_CATALOG[integration_provider]
+    connection = await integration_repository.upsert_connection(
+        session,
+        user_id=user.id,
+        provider=integration_provider,
+        status=IntegrationConnectionStatus.DISCONNECTED,
+        scopes=definition.scopes,
+        account_email=None,
+        external_connection_id=None,
+        metadata={"message": f"{definition.name} disconnected locally."},
+    )
+    connection.connected_at = None
+    connection.expires_at = None
+    await session.commit()
+    await session.refresh(connection)
+    return IntegrationStatusResponse(**build_integration_response(definition, connection).model_dump())
+
+
+def parse_provider(provider: str) -> IntegrationProvider:
+    try:
+        integration_provider = IntegrationProvider(provider.strip().lower())
+    except ValueError as exc:
+        raise UnknownIntegrationProviderError(f"Unsupported integration provider: {provider}") from exc
+    if integration_provider not in INTEGRATION_CATALOG:
+        raise UnknownIntegrationProviderError(f"Unsupported integration provider: {provider}")
+    return integration_provider
+
+
+def build_integration_response(
+    definition: IntegrationDefinition,
+    connection: IntegrationConnection | None,
+) -> IntegrationResponse:
+    configured = get_composio_client().is_configured()
+    status = connection.status if connection else IntegrationConnectionStatus.DISCONNECTED
+    connected = status == IntegrationConnectionStatus.CONNECTED
+    metadata = connection.metadata_ if connection else {}
+    message = str(metadata.get("message") or default_message(definition, status, configured))
+
+    return IntegrationResponse(
+        id=connection.id if connection else definition.provider.value,
+        provider=definition.provider.value,
+        name=definition.name,
+        description=definition.description,
+        configured=configured,
+        connected=connected,
+        status=status.value,
+        scopes=connection.scopes if connection else definition.scopes,
+        icon=definition.icon,
+        message=message,
+        account_email=connection.account_email if connection else None,
+        external_connection_id=connection.external_connection_id if connection else None,
+        connect_url=metadata.get("connect_url") if isinstance(metadata.get("connect_url"), str) else None,
+        connected_at=connection.connected_at if connection else None,
+        expires_at=connection.expires_at if connection else None,
+        created_at=connection.created_at if connection else None,
+        updated_at=connection.updated_at if connection else None,
+    )
+
+
+def default_message(
+    definition: IntegrationDefinition,
+    status: IntegrationConnectionStatus,
+    configured: bool,
+) -> str:
+    if status == IntegrationConnectionStatus.CONNECTED:
+        return f"{definition.name} is connected."
+    if status == IntegrationConnectionStatus.PENDING:
+        return f"{definition.name} connection was requested. Complete OAuth before agents can use it."
+    if not configured:
+        return "Set COMPOSIO_API_KEY to enable this integration."
+    return f"{definition.name} is ready to connect through Composio."

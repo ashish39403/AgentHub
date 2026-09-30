@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, mockDb } from '../../lib/api-client';
+import { api } from '../../lib/api-client';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Switch } from '../../components/ui/Switch';
@@ -28,6 +28,11 @@ export function RoutinesListPage() {
   const { data: routines, isLoading } = useQuery({
     queryKey: ['routines-list'],
     queryFn: () => api.getRoutines(),
+  });
+
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents-list'],
+    queryFn: () => api.getAgents(),
   });
 
   const toggleActiveMutation = useMutation({
@@ -62,7 +67,7 @@ export function RoutinesListPage() {
   });
 
   const filteredRoutines = (routines || []).filter((r) => {
-    const agent = mockDb.agents.find((a) => a.id === r.agent_id);
+    const agent = agents.find((a) => a.id === r.agent_id);
     return (
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.prompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -137,7 +142,7 @@ export function RoutinesListPage() {
                 </tr>
               ) : (
                 filteredRoutines.map((routine) => {
-                  const agent = mockDb.agents.find((a) => a.id === routine.agent_id);
+                  const agent = agents.find((a) => a.id === routine.agent_id);
 
                   return (
                     <TableRow key={routine.id}>

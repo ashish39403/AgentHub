@@ -13,6 +13,7 @@ from app.services.conversation_service import (
     ConversationNotFoundError,
     create_user_conversation,
     create_user_message,
+    delete_user_conversation,
     get_user_conversation,
     list_user_agent_conversations,
     run_user_conversation_agent,
@@ -73,6 +74,18 @@ async def create_message(
 ) -> MessageResponse:
     try:
         return await create_user_message(session, user=current_user, conversation_id=conversation_id, payload=payload)
+    except ConversationNotFoundError as exc:
+        raise not_found_error(exc, code="conversation_not_found") from exc
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conversation_id: UUID,
+    session: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    try:
+        await delete_user_conversation(session, user=current_user, conversation_id=conversation_id)
     except ConversationNotFoundError as exc:
         raise not_found_error(exc, code="conversation_not_found") from exc
 

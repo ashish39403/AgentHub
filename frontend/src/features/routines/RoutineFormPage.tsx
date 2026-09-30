@@ -4,7 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, mockDb } from '../../lib/api-client';
+import { api } from '../../lib/api-client';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { Select } from '../../components/ui/Select';
@@ -28,7 +28,7 @@ type RoutineFormValues = z.infer<typeof routineFormSchema>;
 export function RoutineFormPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const defaultAgentId = searchParams.get('agent_id') || mockDb.agents[0]?.id || '';
+  const defaultAgentId = searchParams.get('agent_id') || '';
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -38,6 +38,11 @@ export function RoutineFormPage() {
     queryKey: ['routine-detail', id],
     queryFn: () => (id ? api.getRoutine(id) : null),
     enabled: isEdit,
+  });
+
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents-list'],
+    queryFn: () => api.getAgents(),
   });
 
   const {
@@ -72,6 +77,12 @@ export function RoutineFormPage() {
       });
     }
   }, [routine, reset]);
+
+  useEffect(() => {
+    if (!isEdit && !watch('agent_id') && agents.length > 0) {
+      setValue('agent_id', agents[0].id);
+    }
+  }, [agents, isEdit, setValue, watch]);
 
   const currentSchedule = watch('schedule') || '';
 
@@ -160,7 +171,7 @@ export function RoutineFormPage() {
               label="Assigned Agent"
               error={errors.agent_id?.message}
               {...register('agent_id')}
-              options={mockDb.agents.map((a) => ({
+              options={agents.map((a) => ({
                 value: a.id,
                 label: `${a.name} (${a.tools.length} tools)`,
               }))}

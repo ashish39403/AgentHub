@@ -18,3 +18,16 @@ class RoutineRunStatus(StrEnum):
 class ToolActionStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+
+
+class IntegrationProvider(StrEnum):
+    GMAIL = "gmail"
+    NOTION = "notion"
+    GITHUB = "github"
+
+
+class IntegrationConnectionStatus(StrEnum):
+    DISCONNECTED = "disconnected"
+    PENDING = "pending"
+    CONNECTED = "connected"
+    ERROR = "error"

@@ -41,3 +41,20 @@ async def list_runs_for_routine(
         .order_by(RoutineRun.started_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def get_run_for_routine(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    routine_id: UUID,
+    run_id: UUID,
+) -> RoutineRun | None:
+    result = await session.execute(
+        select(RoutineRun).where(
+            RoutineRun.id == run_id,
+            RoutineRun.user_id == user_id,
+            RoutineRun.routine_id == routine_id,
+        )
+    )
+    return result.scalar_one_or_none()

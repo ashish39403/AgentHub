@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.agents.loop import AgentLoopMaxIterationsError, run_agent_loop
-from app.agents.types import AgentRuntimeMessage, LLMResponse, ToolCall, ToolDefinition
+from app.agents.types import AgentRuntimeMessage, LLMResponse, ToolCall, ToolDefinition, ToolExecutionResult
 from app.db.base import Base
 from app.models.agent import Agent
 from app.models.conversation import Conversation
@@ -113,6 +113,42 @@ class LoopingLLMClient:
         return LLMResponse(tool_call=ToolCall(name="datetime", arguments={}))
 
 
+class SearchAwareFinalLLMClient:
+    async def complete(
+        self,
+        *,
+        messages: list[AgentRuntimeMessage],
+        tools: list[ToolDefinition],
+    ) -> LLMResponse:
+        if messages[-1].role == "tool":
+            return LLMResponse(content="Here is a fresh summary based on web_search.")
+        return LLMResponse(content="I cannot access latest news.")
+
+
+class FakeSearchRegistry:
+    def definitions(self, enabled_tools: list[str] | None = None) -> list[ToolDefinition]:
+        return [
+            ToolDefinition(
+                name="web_search",
+                description="Search the web.",
+                category="search",
+                safety_level="read_only",
+                parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ]
+
+    async def execute(self, name: str, arguments: dict, *, context, enabled_tools: list[str]) -> ToolExecutionResult:
+        return ToolExecutionResult(
+            name=name,
+            input=arguments,
+            output={
+                "status": "succeeded",
+                "headline": "Fresh news headline",
+                "results": [{"title": "Fresh news", "url": "https://example.com/news"}],
+            },
+        )
+
+
 @pytest.mark.parametrize("max_iterations", [1])
 def test_agent_loop_stops_at_max_iterations(max_iterations: int) -> None:
     async def scenario() -> None:
@@ -157,6 +193,70 @@ def test_agent_loop_stops_at_max_iterations(max_iterations: int) -> None:
                         llm_client=LoopingLLMClient(),
                         max_iterations=max_iterations,
                     )
+        finally:
+            await engine.dispose()
+            admin = await asyncpg.connect("postgresql://agenthub:agenthub@127.0.0.1:5433/agenthub")
+            await admin.execute(
+                """
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = $1 AND pid <> pg_backend_pid()
+                """,
+                database_name,
+            )
+            await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+            await admin.close()
+
+    asyncio.run(scenario())
+
+
+def test_agent_loop_forces_web_search_for_latest_queries() -> None:
+    async def scenario() -> None:
+        database_name = f"agenthub_forced_search_test_{uuid4().hex}"
+        admin = await asyncpg.connect("postgresql://agenthub:agenthub@127.0.0.1:5433/agenthub")
+        await admin.execute(f'CREATE DATABASE "{database_name}"')
+        await admin.close()
+
+        engine = create_async_engine(
+            f"postgresql+asyncpg://agenthub:agenthub@127.0.0.1:5433/{database_name}",
+            poolclass=NullPool,
+        )
+        Session = async_sessionmaker(engine, expire_on_commit=False)
+
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+            async with Session() as session:
+                user = User(name="Search User", email="search@example.com", hashed_password="hashed")
+                session.add(user)
+                await session.flush()
+                agent = Agent(
+                    user_id=user.id,
+                    name="Search Agent",
+                    instructions="Use search for latest information.",
+                    objective="Test search routing.",
+                    enabled_tools=["web_search"],
+                )
+                session.add(agent)
+                await session.flush()
+                conversation = Conversation(user_id=user.id, agent_id=agent.id, title="Search")
+                conversation.agent = agent
+                session.add(conversation)
+                await session.flush()
+
+                result = await run_agent_loop(
+                    session,
+                    user=user,
+                    conversation=conversation,
+                    payload=MessageCreate(content="Give me today's latest general news."),
+                    llm_client=SearchAwareFinalLLMClient(),
+                    tool_registry=FakeSearchRegistry(),
+                )
+
+                assert result.tool_messages[0].tool_calls["name"] == "web_search"
+                assert "today's latest general news" in result.tool_results[0].input["query"].lower()
+                assert result.assistant_message.content == "Here is a fresh summary based on web_search."
         finally:
             await engine.dispose()
             admin = await asyncpg.connect("postgresql://agenthub:agenthub@127.0.0.1:5433/agenthub")

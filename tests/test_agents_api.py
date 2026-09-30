@@ -40,6 +40,8 @@ def test_create_list_get_update_and_delete_agent(auth_client: TestClient) -> Non
 
     assert created["name"] == "Internship Research Agent"
     assert created["user_id"] == auth["user"]["id"]
+    assert "web_search" in created["enabled_tools"]
+    assert "datetime" in created["enabled_tools"]
 
     list_response = auth_client.get("/api/v1/agents", headers=headers)
 

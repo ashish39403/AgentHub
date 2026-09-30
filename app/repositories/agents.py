@@ -13,6 +13,8 @@ async def create_agent(
     name: str,
     instructions: str,
     objective: str,
+    model: str,
+    temperature: float,
     enabled_tools: list[str],
 ) -> Agent:
     agent = Agent(
@@ -20,6 +22,8 @@ async def create_agent(
         name=name,
         instructions=instructions,
         objective=objective,
+        model=model,
+        temperature=temperature,
         enabled_tools=enabled_tools,
     )
     session.add(agent)
