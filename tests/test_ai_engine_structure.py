@@ -19,7 +19,8 @@ def test_prompt_builder_lists_tool_rules() -> None:
 
     assert "web_search" in instruction
     assert "draft_message" in instruction
-    assert "Never claim a tool was unavailable" in instruction
+    assert "<tools>" in instruction
+    assert "Never claim a listed tool is unavailable" in instruction
 
 
 def test_system_prompt_contains_engine_rules() -> None:
@@ -33,9 +34,11 @@ def test_system_prompt_contains_engine_rules() -> None:
 
     prompt = build_system_prompt(agent)
 
-    assert "Agent instructions: Find internships" in prompt
-    assert "Agent objective: Help a student" in prompt
+    assert "<identity>" in prompt
+    assert "Custom instructions: Find internships" in prompt
+    assert "Primary objective: Help a student" in prompt
     assert "web_search" in prompt
-    assert "Freshness rule" in prompt
-    assert "Safety:" in prompt
-    assert "Response rule" in prompt
+    assert "<freshness>" in prompt
+    assert "<safety>" in prompt
+    assert "<response_rules>" in prompt
+    assert "<output_format>" in prompt

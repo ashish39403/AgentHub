@@ -97,9 +97,10 @@ async def run_forced_tool_node(state: AgentGraphState) -> dict[str, Any]:
 
 async def call_model_node(state: AgentGraphState) -> dict[str, Any]:
     run_state = state["run_state"]
+    available_tools = [] if run_state.tool_results else state["tool_registry"].definitions(run_state.enabled_tools)
     llm_response = await state["llm_client"].complete(
         messages=run_state.runtime_messages,
-        tools=state["tool_registry"].definitions(run_state.enabled_tools),
+        tools=available_tools,
     )
     return {
         "llm_response": llm_response,

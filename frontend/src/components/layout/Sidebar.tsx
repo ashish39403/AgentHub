@@ -13,7 +13,6 @@ import {
   Plus,
   ChevronsUpDown,
   LogOut,
-  ChevronDown,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -56,10 +55,6 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
             <span className="text-base font-semibold text-[#111827] tracking-tight truncate">
               AgentHub
             </span>
-          </div>
-          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#f9fafb] border border-[#e5e7eb] text-[#6b7280] text-[11px] font-mono cursor-pointer hover:bg-[#f3f4f6] transition-colors">
-            <span>prod</span>
-            <ChevronDown className="w-3 h-3" />
           </div>
         </div>
 

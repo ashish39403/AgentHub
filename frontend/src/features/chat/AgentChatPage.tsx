@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, streamMessageHelper } from '../../lib/api-client';
-import { Message, ToolCallPayload } from '../../types';
+import { ApiError, api, streamMessageHelper } from '../../lib/api-client';
+import { Conversation, Message, ToolCallPayload } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { formatRelativeTime } from '../../lib/utils';
@@ -11,7 +11,6 @@ import {
   Search,
   Plus,
   Trash2,
-  Share2,
   Sliders,
   Send,
   Paperclip,
@@ -26,6 +25,11 @@ import {
   X,
   Bot,
 } from 'lucide-react';
+
+const hasApiStatus = (error: unknown, status: number) =>
+  error instanceof ApiError || (typeof error === 'object' && error !== null && 'status' in error)
+    ? (error as { status?: number }).status === status
+    : false;
 
 export function AgentChatPage() {
   const { id: agentId } = useParams<{ id: string }>();
@@ -64,11 +68,43 @@ export function AgentChatPage() {
     }
   }, [conversations, activeConvId]);
 
-  const { data: currentConversation, refetch: refetchConversation } = useQuery({
+  const removeConversationLocally = useCallback((conversationId: string) => {
+    const existing =
+      queryClient.getQueryData<Conversation[]>(['agent-conversations', agentId]) ||
+      conversations ||
+      [];
+    const remaining = existing.filter((conversation) => conversation.id !== conversationId);
+
+    queryClient.setQueryData(['agent-conversations', agentId], remaining);
+    queryClient.removeQueries({ queryKey: ['conversation-messages', conversationId] });
+
+    if (activeConvId === conversationId) {
+      setActiveConvId(remaining[0]?.id ?? null);
+    }
+
+    return remaining;
+  }, [activeConvId, agentId, conversations, queryClient]);
+
+  const {
+    data: currentConversation,
+    error: conversationError,
+    refetch: refetchConversation,
+  } = useQuery({
     queryKey: ['conversation-messages', activeConvId],
     queryFn: () => (activeConvId ? api.getConversation(activeConvId) : null),
     enabled: !!activeConvId,
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 404) return false;
+      return failureCount < 1;
+    },
   });
+
+  useEffect(() => {
+    if (hasApiStatus(conversationError, 404) && activeConvId) {
+      removeConversationLocally(activeConvId);
+      queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
+    }
+  }, [conversationError, activeConvId, agentId, queryClient, removeConversationLocally]);
 
   const messages = currentConversation?.messages || [];
   const chatItems = buildChatItems(messages);
@@ -92,17 +128,51 @@ export function AgentChatPage() {
   });
 
   const deleteConvMutation = useMutation({
-    mutationFn: (conversationId: string) => api.deleteConversation(conversationId),
-    onSuccess: async () => {
-      const deletedConversationId = activeConvId;
-      setActiveConvId(null);
-      await queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
-      if (deletedConversationId) {
-        queryClient.removeQueries({ queryKey: ['conversation-messages', deletedConversationId] });
+    mutationFn: async (conversationId: string) => {
+      try {
+        await api.deleteConversation(conversationId);
+      } catch (error) {
+        if (hasApiStatus(error, 404)) return;
+        throw error;
       }
+    },
+    onMutate: async (deletedConversationId) => {
+      await queryClient.cancelQueries({ queryKey: ['agent-conversations', agentId] });
+      await queryClient.cancelQueries({ queryKey: ['conversation-messages', deletedConversationId] });
+
+      const previousConversations =
+        queryClient.getQueryData<Conversation[]>(['agent-conversations', agentId]) ||
+        conversations ||
+        [];
+      const previousActiveConversationId = activeConvId;
+
+      removeConversationLocally(deletedConversationId);
+
+      return { previousConversations, previousActiveConversationId };
+    },
+    onSuccess: (_, deletedConversationId) => {
+      removeConversationLocally(deletedConversationId);
       toast.success('Conversation cleared', 'The current conversation was deleted.');
     },
-    onError: () => toast.error('Delete failed', 'Could not delete this conversation.'),
+    onError: (error, deletedConversationId, context) => {
+      if (hasApiStatus(error, 404)) {
+        removeConversationLocally(deletedConversationId);
+        toast.info('Conversation was already removed.');
+        return;
+      }
+
+      if (context?.previousConversations) {
+        queryClient.setQueryData(['agent-conversations', agentId], context.previousConversations);
+      }
+      if (context?.previousActiveConversationId) {
+        setActiveConvId(context.previousActiveConversationId);
+      }
+
+      toast.error('Delete failed', 'Could not delete this conversation.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
+    },
   });
 
   const handleSend = async () => {
@@ -221,7 +291,7 @@ export function AgentChatPage() {
                 <div
                   key={conv.id}
                   onClick={() => setActiveConvId(conv.id)}
-                  className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
+                  className={`group p-2.5 rounded-lg border transition-all cursor-pointer ${
                     isActive
                       ? 'bg-white border-[#0f766e] shadow-xs'
                       : 'border-transparent hover:bg-white'
@@ -235,9 +305,19 @@ export function AgentChatPage() {
                     >
                       {agent?.name || 'Agent'}
                     </span>
-                    <span className="font-mono text-[10px] text-[#6b7280]">
-                      {formatRelativeTime(conv.updated_at)}
-                    </span>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isStreaming) {
+                          deleteConvMutation.mutate(conv.id);
+                        }
+                      }}
+                      disabled={isStreaming || deleteConvMutation.isPending}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-[#6b7280] hover:text-[#dc2626] hover:bg-[#fee2e2] disabled:opacity-40 transition-all cursor-pointer"
+                      title="Delete conversation"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   <p className="text-xs font-medium text-[#111827] truncate">
                     {conv.title}
@@ -297,14 +377,6 @@ export function AgentChatPage() {
               </button>
 
               <button
-                onClick={() => toast.info('Share URL copied to clipboard')}
-                className="p-1.5 rounded text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6] transition-colors cursor-pointer"
-                title="Share session"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-
-              <button
                 onClick={() => navigate(`/agents/${agentId}/edit`)}
                 className="p-1.5 rounded text-[#6b7280] hover:text-[#111827] hover:bg-[#f3f4f6] transition-colors cursor-pointer"
                 title="Agent settings"
@@ -352,37 +424,41 @@ export function AgentChatPage() {
 
                   <div className="flex-1 min-w-0 space-y-3 max-w-3xl">
                     {/* Thinking indicator */}
-                    <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#f9fafb] border border-[#e5e7eb] text-[#4b5563] font-mono text-[11px]">
-                      <Sparkles className="w-3.5 h-3.5 text-[#0f766e]" />
-                      <span>Execution pipeline resolved</span>
-                      <span className="text-[#6b7280]">•</span>
-                      <span className="text-[#6b7280]">{agent?.tools.length ?? 3} tools in scope</span>
-                    </div>
+                    {tools.length > 0 && (
+                      <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#f9fafb] border border-[#e5e7eb] text-[#4b5563] font-mono text-[11px]">
+                        <Sparkles className="w-3.5 h-3.5 text-[#0f766e]" />
+                        <span>Sources checked</span>
+                        <span className="text-[#6b7280]">•</span>
+                        <span className="text-[#6b7280]">{tools.length} tool{tools.length === 1 ? '' : 's'} used</span>
+                      </div>
+                    )}
 
                     {/* Tool Call Cards */}
                     {tools.length > 0 && (
                       <div className="space-y-2">
                         {tools.map((tool) => {
-                          const isCollapsed = collapsedTools[tool.id];
+                          const isCollapsed = collapsedTools[tool.id] ?? true;
 
                           return (
                             <div
                               key={tool.id}
-                              className="rounded-lg bg-[#f9fafb] border border-[#e5e7eb] overflow-hidden"
+                              className="rounded-lg bg-white border border-[#e5e7eb] overflow-hidden"
                             >
                               <div
                                 onClick={() => toggleToolCollapse(tool.id)}
                                 className="px-3 py-2 flex items-center justify-between text-[#111827] cursor-pointer select-none"
                               >
-                                <div className="flex items-center gap-2 font-mono text-xs">
-                                  <span className="text-[#6b7280]">tool:</span>
+                                <div className="flex items-center gap-2 text-xs">
                                   <span className="font-semibold text-[#0f766e]">
-                                    {tool.tool_name}
+                                    {formatToolName(tool.tool_name)}
+                                  </span>
+                                  <span className="text-[#6b7280]">
+                                    {formatToolSummary(tool.output)}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]">
-                                    Succeeded ({tool.duration_ms || 450}ms)
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]">
+                                    Succeeded
                                   </span>
                                   {isCollapsed ? (
                                     <ChevronDown className="w-4 h-4 text-[#6b7280]" />
@@ -393,15 +469,14 @@ export function AgentChatPage() {
                               </div>
 
                               {!isCollapsed && (
-                                <div className="px-3 pb-2.5 pt-1.5 border-t border-[#e5e7eb] bg-white font-mono text-[11px] text-[#4b5563] space-y-1">
-                                  <div className="text-[#6b7280]">// Execution parameters</div>
+                                <div className="px-3 pb-2.5 pt-1.5 border-t border-[#e5e7eb] bg-[#f9fafb] text-[11px] text-[#4b5563] space-y-1.5">
                                   <div>
-                                    <span className="text-[#0f766e] font-medium">input: </span>
-                                    {JSON.stringify(tool.input)}
+                                    <span className="text-[#0f766e] font-medium">Query: </span>
+                                    {formatToolInput(tool.input)}
                                   </div>
                                   {tool.output && (
                                     <div>
-                                      <span className="text-[#16a34a] font-medium">status: </span>
+                                      <span className="text-[#16a34a] font-medium">Result: </span>
                                       {formatToolOutput(tool.output)}
                                     </div>
                                   )}
@@ -415,7 +490,7 @@ export function AgentChatPage() {
 
                     {/* Markdown Output Body */}
                     <div className="rounded-xl bg-[#f9fafb] p-4 border border-[#e5e7eb] text-xs sm:text-sm text-[#111827] leading-relaxed whitespace-pre-wrap">
-                      {msg.content}
+                      <MarkdownMessage content={msg.content} />
                     </div>
                   </div>
                 </div>
@@ -469,8 +544,8 @@ export function AgentChatPage() {
 
                   {/* Streaming Content */}
                   {streamingContent && (
-                    <div className="rounded-xl bg-[#f9fafb] p-4 border border-[#e5e7eb] text-xs sm:text-sm text-[#111827] leading-relaxed whitespace-pre-wrap">
-                      {streamingContent}
+                    <div className="rounded-xl bg-[#f9fafb] p-4 border border-[#e5e7eb] text-xs sm:text-sm text-[#111827] leading-relaxed">
+                      <MarkdownMessage content={streamingContent} />
                       <span className="inline-block w-2 h-4 ml-1 bg-[#0f766e] align-middle animate-pulse" />
                     </div>
                   )}
@@ -726,4 +801,95 @@ function formatToolOutput(output: Record<string, unknown> | string): string {
   const tavily = output.tavily_used === true ? ' + Tavily fallback' : '';
   const headline = typeof output.headline === 'string' ? ` - ${output.headline}` : '';
   return `${status}${provider}${tavily}${headline}`;
+}
+
+function formatToolName(name: string): string {
+  return name
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatToolInput(input: Record<string, unknown>): string {
+  const query = input.query;
+  if (typeof query === 'string' && query.trim()) {
+    return query;
+  }
+  const purpose = input.purpose;
+  if (typeof purpose === 'string' && purpose.trim()) {
+    return purpose;
+  }
+  return 'Tool input prepared by the agent.';
+}
+
+function formatToolSummary(output: Record<string, unknown> | string | undefined): string {
+  if (!output) return 'completed';
+  if (typeof output === 'string') return 'completed';
+  if (typeof output.primary_provider === 'string') return `via ${output.primary_provider}`;
+  if (typeof output.status === 'string') return output.status;
+  return 'completed';
+}
+
+function MarkdownMessage({ content }: { content: string }) {
+  const lines = content.split('\n');
+
+  return (
+    <div className="space-y-2">
+      {lines.map((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={index} className="h-1" />;
+        }
+
+        if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
+          return (
+            <div key={index} className="pt-1 text-sm font-semibold text-[#111827]">
+              {trimmed.slice(2, -2)}
+            </div>
+          );
+        }
+
+        if (/^\d+\.\s+/.test(trimmed)) {
+          return (
+            <div key={index} className="flex gap-2">
+              <span className="text-[#6b7280]">{trimmed.match(/^\d+\./)?.[0]}</span>
+              <span>{renderInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ''))}</span>
+            </div>
+          );
+        }
+
+        if (trimmed.startsWith('- ')) {
+          return (
+            <div key={index} className="flex gap-2">
+              <span className="text-[#0f766e]">-</span>
+              <span>{renderInlineMarkdown(trimmed.slice(2))}</span>
+            </div>
+          );
+        }
+
+        return <p key={index}>{renderInlineMarkdown(line)}</p>;
+      })}
+    </div>
+  );
+}
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={index} className="font-semibold text-[#111827]">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={index} className="px-1 py-0.5 rounded bg-white border border-[#e5e7eb] font-mono text-[0.85em]">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
 }

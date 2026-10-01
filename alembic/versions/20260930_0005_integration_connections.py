@@ -18,8 +18,21 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    integration_provider = sa.Enum("gmail", "notion", "github", name="integration_provider")
-    integration_status = sa.Enum("disconnected", "pending", "connected", "error", name="integration_connection_status")
+    integration_provider = postgresql.ENUM(
+        "gmail",
+        "notion",
+        "github",
+        name="integration_provider",
+        create_type=False,
+    )
+    integration_status = postgresql.ENUM(
+        "disconnected",
+        "pending",
+        "connected",
+        "error",
+        name="integration_connection_status",
+        create_type=False,
+    )
     integration_provider.create(op.get_bind(), checkfirst=True)
     integration_status.create(op.get_bind(), checkfirst=True)
 

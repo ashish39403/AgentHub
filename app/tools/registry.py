@@ -42,8 +42,8 @@ class ToolRegistry:
             "draft_message": draft_message_handler,
             "send_slack_message": lambda _, arguments: send_slack_message(arguments),
             "gmail_summary": gmail_summary,
-            "notion_create_page": lambda _, arguments: notion_create_page(arguments),
-            "github_issue_search": lambda _, arguments: github_issue_search(arguments),
+            "notion_create_page": notion_create_page,
+            "github_issue_search": github_issue_search,
         }
         self._definitions: dict[str, ToolDefinition] = {
             "datetime": ToolDefinition(
@@ -55,7 +55,7 @@ class ToolRegistry:
             ),
             "web_search": ToolDefinition(
                 name="web_search",
-                description="Use when the user asks to search the web, find latest opportunities, research internships, or gather current external information. Uses Serper first, then SerpAPI if Serper is not configured. Tavily fallback is disabled by default and only runs when ENABLE_TAVILY_FALLBACK is true.",
+                description="Use when the user asks to search the web, find latest opportunities, research internships, or gather current external information. Uses Serper as the primary search provider. Tavily fallback is disabled by default and only runs when ENABLE_TAVILY_FALLBACK is true.",
                 category="search",
                 safety_level="read_only",
                 parameters={

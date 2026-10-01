@@ -125,6 +125,22 @@ class SearchAwareFinalLLMClient:
         return LLMResponse(content="I cannot access latest news.")
 
 
+class ToolOnceThenFinalLLMClient:
+    def __init__(self) -> None:
+        self.tool_counts: list[int] = []
+
+    async def complete(
+        self,
+        *,
+        messages: list[AgentRuntimeMessage],
+        tools: list[ToolDefinition],
+    ) -> LLMResponse:
+        self.tool_counts.append(len(tools))
+        if tools:
+            return LLMResponse(tool_call=ToolCall(name="datetime", arguments={}))
+        return LLMResponse(content=f"Final answer from {messages[-1].role} output.")
+
+
 class FakeSearchRegistry:
     def definitions(self, enabled_tools: list[str] | None = None) -> list[ToolDefinition]:
         return [
@@ -193,6 +209,72 @@ def test_agent_loop_stops_at_max_iterations(max_iterations: int) -> None:
                         llm_client=LoopingLLMClient(),
                         max_iterations=max_iterations,
                     )
+        finally:
+            await engine.dispose()
+            admin = await asyncpg.connect("postgresql://agenthub:agenthub@127.0.0.1:5433/agenthub")
+            await admin.execute(
+                """
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = $1 AND pid <> pg_backend_pid()
+                """,
+                database_name,
+            )
+            await admin.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+            await admin.close()
+
+    asyncio.run(scenario())
+
+
+def test_agent_loop_disables_tools_after_tool_result_for_final_answer() -> None:
+    async def scenario() -> None:
+        database_name = f"agenthub_final_after_tool_test_{uuid4().hex}"
+        admin = await asyncpg.connect("postgresql://agenthub:agenthub@127.0.0.1:5433/agenthub")
+        await admin.execute(f'CREATE DATABASE "{database_name}"')
+        await admin.close()
+
+        engine = create_async_engine(
+            f"postgresql+asyncpg://agenthub:agenthub@127.0.0.1:5433/{database_name}",
+            poolclass=NullPool,
+        )
+        Session = async_sessionmaker(engine, expire_on_commit=False)
+        llm_client = ToolOnceThenFinalLLMClient()
+
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+            async with Session() as session:
+                user = User(name="Tool Final User", email="tool-final@example.com", hashed_password="hashed")
+                session.add(user)
+                await session.flush()
+                agent = Agent(
+                    user_id=user.id,
+                    name="Tool Final Agent",
+                    instructions="Use tools when useful, then answer.",
+                    objective="Test final answer after tool output.",
+                    enabled_tools=["datetime"],
+                )
+                session.add(agent)
+                await session.flush()
+                conversation = Conversation(user_id=user.id, agent_id=agent.id, title="Tool Final")
+                conversation.agent = agent
+                session.add(conversation)
+                await session.flush()
+
+                result = await run_agent_loop(
+                    session,
+                    user=user,
+                    conversation=conversation,
+                    payload=MessageCreate(content="What date is it?"),
+                    llm_client=llm_client,
+                    max_iterations=3,
+                )
+
+                assert len(result.tool_messages) == 1
+                assert llm_client.tool_counts[0] > 0
+                assert llm_client.tool_counts[1] == 0
+                assert result.assistant_message.content == "Final answer from tool output."
         finally:
             await engine.dispose()
             admin = await asyncpg.connect("postgresql://agenthub:agenthub@127.0.0.1:5433/agenthub")

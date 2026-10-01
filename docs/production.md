@@ -21,8 +21,15 @@ AGENT_MAX_ITERATIONS=4
 AICREDITS_BASE_URL=<openai-compatible-base-url>
 AICREDITS_API_KEY=<secret>
 COMPOSIO_API_KEY=<secret-when-enabled>
-SERPER_API_KEY=<primary-search-key-if-using-serper>
-SERPAPI_API_KEY=<primary-search-key-if-using-serpapi>
+COMPOSIO_BASE_URL=https://backend.composio.dev/api/v3.1
+COMPOSIO_CALLBACK_URL=<public-https-callback-url-optional>
+COMPOSIO_GMAIL_AUTH_CONFIG_ID=<composio-gmail-auth-config-id>
+COMPOSIO_NOTION_AUTH_CONFIG_ID=<composio-notion-auth-config-id>
+COMPOSIO_GITHUB_AUTH_CONFIG_ID=<composio-github-auth-config-id>
+COMPOSIO_GMAIL_FETCH_TOOL_SLUG=GMAIL_FETCH_EMAILS
+COMPOSIO_GITHUB_SEARCH_TOOL_SLUG=GITHUB_SEARCH_ISSUES
+COMPOSIO_NOTION_CREATE_PAGE_TOOL_SLUG=NOTION_CREATE_PAGE
+SERPER_API_KEY=<primary-search-key>
 TAVILY_API_KEY=<optional-fallback-after-weak-primary-search-results>
 ENABLE_TAVILY_FALLBACK=false
 ```

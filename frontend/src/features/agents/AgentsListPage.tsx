@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api-client';
+import { ApiError, api } from '../../lib/api-client';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import { Agent } from '../../types';
 import {
   Cpu,
   Search,
@@ -47,18 +48,52 @@ export function AgentsListPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteAgent(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents-list'] });
-      toast.success('Agent removed', 'Agent was successfully deleted.');
+    onMutate: async (deletedAgentId) => {
+      await queryClient.cancelQueries({ queryKey: ['agents-list'] });
+      const previousAgents = queryClient.getQueryData<Agent[]>(['agents-list']);
+
+      queryClient.setQueryData<Agent[]>(['agents-list'], (old) =>
+        old ? old.filter((agent) => agent.id !== deletedAgentId) : old
+      );
+      queryClient.removeQueries({ queryKey: ['agent-detail', deletedAgentId] });
+      queryClient.removeQueries({ queryKey: ['agent-chat-detail', deletedAgentId] });
+      queryClient.removeQueries({ queryKey: ['agent-conversations', deletedAgentId] });
       setActiveMenuId(null);
+
+      return { previousAgents };
+    },
+    onSuccess: () => {
+      toast.success('Agent removed', 'Agent was successfully deleted.');
+    },
+    onError: (error, _deletedAgentId, context) => {
+      if (error instanceof ApiError && error.status === 404) {
+        toast.info('Agent was already removed.');
+        return;
+      }
+      if (context?.previousAgents) {
+        queryClient.setQueryData(['agents-list'], context.previousAgents);
+      }
+      toast.error('Delete failed', 'Could not delete this agent.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['agents-list'] });
+      queryClient.invalidateQueries({ queryKey: ['routines-list'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-recent-runs'] });
     },
   });
 
   const toggleStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: 'active' | 'paused' | 'draft' }) =>
       api.updateAgent(id, { status }),
-    onSuccess: () => {
+    onSuccess: (updatedAgent) => {
+      queryClient.setQueryData<Agent[]>(['agents-list'], (old) =>
+        old ? old.map((agent) => (agent.id === updatedAgent.id ? updatedAgent : agent)) : old
+      );
+      queryClient.setQueryData(['agent-detail', updatedAgent.id], updatedAgent);
+      queryClient.setQueryData(['agent-chat-detail', updatedAgent.id], updatedAgent);
       queryClient.invalidateQueries({ queryKey: ['agents-list'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       toast.success('Agent status updated');
       setActiveMenuId(null);
     },
@@ -131,8 +166,6 @@ export function AgentsListPage() {
             <span className="font-mono text-[11px] text-[#0f766e] bg-[#f0fdfa] border border-[#99f6e4] px-2 py-0.5 rounded-full font-medium tracking-tight">
               ORCHESTRATION
             </span>
-            <span className="font-mono text-[11px] text-[#6b7280]">•</span>
-            <span className="font-mono text-[11px] text-[#6b7280]">WORKSPACE ID: prod_us_east</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-[#111827] tracking-tight">
             Agents

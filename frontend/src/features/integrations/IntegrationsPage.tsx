@@ -27,7 +27,7 @@ export function IntegrationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeModalInt, setActiveModalInt] = useState<Integration | null>(null);
 
-  const { data: integrations, isLoading } = useQuery({
+  const { data: integrations = [], isLoading } = useQuery<Integration[]>({
     queryKey: ['integrations-list'],
     queryFn: () => api.getIntegrations(),
   });
@@ -70,7 +70,7 @@ export function IntegrationsPage() {
     }
   };
 
-  const filteredIntegrations = (integrations || []).filter(
+  const filteredIntegrations = integrations.filter(
     (i) =>
       i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       i.description.toLowerCase().includes(searchQuery.toLowerCase())

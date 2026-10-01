@@ -30,8 +30,18 @@ class Settings(BaseSettings):
     aicredits_base_url: str | None = Field(default=None, alias="AICREDITS_BASE_URL")
     aicredits_api_key: str | None = Field(default=None, alias="AICREDITS_API_KEY")
     composio_api_key: str | None = Field(default=None, alias="COMPOSIO_API_KEY")
+    composio_base_url: str = Field(default="https://backend.composio.dev/api/v3.1", alias="COMPOSIO_BASE_URL")
+    composio_callback_url: str | None = Field(default=None, alias="COMPOSIO_CALLBACK_URL")
+    composio_gmail_auth_config_id: str | None = Field(default=None, alias="COMPOSIO_GMAIL_AUTH_CONFIG_ID")
+    composio_notion_auth_config_id: str | None = Field(default=None, alias="COMPOSIO_NOTION_AUTH_CONFIG_ID")
+    composio_github_auth_config_id: str | None = Field(default=None, alias="COMPOSIO_GITHUB_AUTH_CONFIG_ID")
+    composio_gmail_fetch_tool_slug: str = Field(default="GMAIL_FETCH_EMAILS", alias="COMPOSIO_GMAIL_FETCH_TOOL_SLUG")
+    composio_github_search_tool_slug: str = Field(default="GITHUB_SEARCH_ISSUES", alias="COMPOSIO_GITHUB_SEARCH_TOOL_SLUG")
+    composio_notion_create_page_tool_slug: str = Field(
+        default="NOTION_CREATE_PAGE",
+        alias="COMPOSIO_NOTION_CREATE_PAGE_TOOL_SLUG",
+    )
     serper_api_key: str | None = Field(default=None, alias="SERPER_API_KEY")
-    serpapi_api_key: str | None = Field(default=None, alias="SERPAPI_API_KEY")
     tavily_api_key: str | None = Field(default=None, alias="TAVILY_API_KEY")
     enable_tavily_fallback: bool = Field(default=False, alias="ENABLE_TAVILY_FALLBACK")
     cors_origins_raw: str = Field(

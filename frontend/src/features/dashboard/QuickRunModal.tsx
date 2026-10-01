@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Select } from '../../components/ui/Select';
@@ -20,6 +20,7 @@ export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
   const [isRunning, setIsRunning] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: agents = [] } = useQuery({
     queryKey: ['agents-list'],
     queryFn: () => api.getAgents(),
@@ -27,8 +28,12 @@ export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
   });
 
   useEffect(() => {
-    if (!selectedAgentId && agents.length > 0) {
+    const selectedAgentExists = agents.some((agent) => agent.id === selectedAgentId);
+    if ((!selectedAgentId || !selectedAgentExists) && agents.length > 0) {
       setSelectedAgentId(agents[0].id);
+    }
+    if (selectedAgentId && !selectedAgentExists && agents.length === 0) {
+      setSelectedAgentId('');
     }
   }, [agents, selectedAgentId]);
 
@@ -44,6 +49,9 @@ export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
       if (prompt) {
         await api.sendMessage(conv.id, prompt);
       }
+      queryClient.invalidateQueries({ queryKey: ['agent-conversations', selectedAgentId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-recent-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       toast.success('Execution started', 'Dispatched run across worker runtime.');
       onClose();
       navigate(`/agents/${selectedAgentId}/chat?conv=${conv.id}`);
@@ -77,6 +85,7 @@ export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
             size="sm"
             isLoading={isRunning}
             onClick={handleRun}
+            disabled={agents.length === 0}
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Launch Execution</span>
@@ -85,15 +94,22 @@ export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
       }
     >
       <div className="space-y-4">
-        <Select
-          label="Target Autonomous Agent"
-          value={selectedAgentId}
-          onChange={(e) => setSelectedAgentId(e.target.value)}
-          options={agents.map((a) => ({
-            value: a.id,
-            label: `${a.name} (${a.tools.length} tools attached)`,
-          }))}
-        />
+        {agents.length === 0 ? (
+          <div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3 text-xs text-[#4b5563]">
+            Create an agent first, then use Quick Run to start a one-off chat with that agent.
+          </div>
+        ) : (
+          <Select
+            label="Target Agent"
+            hint={`${agents.length} available`}
+            value={selectedAgentId}
+            onChange={(e) => setSelectedAgentId(e.target.value)}
+            options={agents.map((a) => ({
+              value: a.id,
+              label: `${a.name} (${a.tools.length} tools)`,
+            }))}
+          />
+        )}
 
         <Textarea
           label="Execution Prompt Override (Optional)"
@@ -103,7 +119,29 @@ export function QuickRunModal({ isOpen, onClose }: QuickRunModalProps) {
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
         />
+
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-[#111827]">Examples</span>
+          <div className="grid grid-cols-1 gap-2">
+            {quickRunExamples.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => setPrompt(example)}
+                className="rounded-lg border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] hover:border-[#0f766e] hover:text-[#111827] transition-colors"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </Modal>
   );
 }
+
+const quickRunExamples = [
+  'Find today\'s latest AI engineering internship opportunities and summarize the top 5.',
+  'Search for remote software engineering internships posted this week and rank them by relevance.',
+  'Draft a professional LinkedIn message asking a recruiter about internship openings.',
+];

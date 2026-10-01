@@ -61,6 +61,9 @@ export function DashboardPage() {
 
   const agentById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
   const routineById = useMemo(() => new Map(routines.map((routine) => [routine.id, routine])), [routines]);
+  const activeAgentsCount = agents.filter((agent) => agent.status === 'active').length;
+  const healthyAgentsCount = activeAgentsCount;
+  const activeRoutinesCount = routines.filter((routine) => routine.is_active).length;
 
   // Dismiss Action item mutation
   const dismissMutation = useMutation({
@@ -106,8 +109,6 @@ export function DashboardPage() {
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5 text-[#6b7280] font-mono text-[11px] tracking-wider uppercase">
             <span>Orchestration</span>
-            <span>/</span>
-            <span>Workspace Prod</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-[#111827] tracking-tight">
             Dashboard
@@ -176,11 +177,11 @@ export function DashboardPage() {
           <div className="flex items-baseline justify-between mt-auto">
             <div>
               <div className="text-3xl font-semibold text-[#111827] tracking-tight leading-none mb-1.5">
-                {isSummaryLoading ? <Skeleton className="h-8 w-12" /> : summary?.active_agents_count ?? 0}
+                {isSummaryLoading && agents.length === 0 ? <Skeleton className="h-8 w-12" /> : activeAgentsCount}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-[#0f766e] font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a]" />
-                <span>{summary?.healthy_agents_count ?? 0} healthy</span>
+                <span>{healthyAgentsCount} healthy</span>
               </div>
             </div>
             <div className="flex items-center gap-1 text-[11px] font-mono bg-[#f0fdfa] text-[#0f766e] px-1.5 py-0.5 rounded border border-[#99f6e4]">
@@ -198,7 +199,7 @@ export function DashboardPage() {
           <div className="flex items-baseline justify-between mt-auto">
             <div>
               <div className="text-3xl font-semibold text-[#111827] tracking-tight leading-none mb-1.5">
-                {isSummaryLoading ? <Skeleton className="h-8 w-12" /> : summary?.active_routines_count ?? 0}
+                {isSummaryLoading && routines.length === 0 ? <Skeleton className="h-8 w-12" /> : activeRoutinesCount}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-[#4b5563]">
                 <Clock className="w-3.5 h-3.5 text-[#6b7280]" />

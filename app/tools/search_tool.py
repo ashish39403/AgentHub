@@ -1,6 +1,5 @@
 import asyncio
 import json
-from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from app.core.config import settings
@@ -55,7 +54,7 @@ async def web_search(arguments: dict) -> dict:
         "tavily_used": bool(tavily_results),
         "fallback_used": bool(tavily_results),
         "fallback_enabled": settings.enable_tavily_fallback,
-        "live_search_used": any(result.get("source") in {"serper", "serpapi", "tavily"} for result in ranked_results),
+        "live_search_used": any(result.get("source") in {"serper", "tavily"} for result in ranked_results),
         "headline": build_headline(ranked_results, query),
         "results": ranked_results,
         "next_step": next_step_for_search(
@@ -69,19 +68,15 @@ async def web_search(arguments: dict) -> dict:
 def primary_provider_name() -> str:
     if settings.serper_api_key:
         return "serper"
-    if settings.serpapi_api_key:
-        return "serpapi"
     return "not_configured"
 
 
 def has_primary_search_key() -> bool:
-    return bool(settings.serper_api_key or settings.serpapi_api_key)
+    return bool(settings.serper_api_key)
 
 
 async def search_primary_provider(*, query: str, limit: int) -> list[dict]:
-    if settings.serper_api_key:
-        return await search_serper(query=query, limit=limit)
-    return await search_serpapi(query=query, limit=limit)
+    return await search_serper(query=query, limit=limit)
 
 
 async def search_serper(*, query: str, limit: int) -> list[dict]:
@@ -111,30 +106,7 @@ async def search_serper(*, query: str, limit: int) -> list[dict]:
     ]
 
 
-async def search_serpapi(*, query: str, limit: int) -> list[dict]:
-    if not settings.serpapi_api_key:
-        return []
-
-    params = urlencode({"engine": "google", "q": query, "api_key": settings.serpapi_api_key, "num": limit})
-    payload = await fetch_json(f"https://serpapi.com/search.json?{params}")
-    organic_results = payload.get("organic_results") if isinstance(payload, dict) else None
-    if not isinstance(organic_results, list):
-        return []
-
-    return [
-        {
-            "title": str(result.get("title") or "Untitled result"),
-            "url": result.get("link"),
-            "snippet": str(result.get("snippet") or ""),
-            "source": "serpapi",
-            "score": max(100 - index, 1),
-        }
-        for index, result in enumerate(organic_results[:limit])
-        if isinstance(result, dict)
-    ]
-
-
-async def search_tavily(*, query: str, limit: int) -> list[dict]:
+async def search_tavily(*, query: str, limit: int = 5) -> list[dict]:
     if not settings.tavily_api_key:
         return []
     request_body = {
@@ -194,7 +166,7 @@ def build_headline(results: list[dict], query: str) -> str:
 
 def next_step_for_search(results: list[dict], *, primary_results_enough: bool, tavily_used: bool) -> str:
     if results and results[0].get("source") == "local_configuration_notice":
-        return "Add SERPER_API_KEY or SERPAPI_API_KEY to .env, then restart the backend. Tavily fallback is disabled by default."
+        return "Add SERPER_API_KEY to .env, then restart the backend. Tavily fallback is disabled by default."
     if not primary_results_enough and not tavily_used:
         return "Primary search ran but results were weak. Tavily was not called because ENABLE_TAVILY_FALLBACK is false, missing, or TAVILY_API_KEY is not set."
     return "Review the ranked results and summarize the most relevant findings for the user."
@@ -212,7 +184,7 @@ def search_configuration_notice(query: str) -> dict:
     return {
         "title": f"Primary search is not configured for: {query}",
         "url": None,
-        "snippet": "Set SERPER_API_KEY or SERPAPI_API_KEY in .env to enable live web search. Tavily fallback is disabled by default, so it was not called.",
+        "snippet": "Set SERPER_API_KEY in .env to enable live web search. Tavily fallback is disabled by default, so it was not called.",
         "source": "local_configuration_notice",
         "score": 10,
     }

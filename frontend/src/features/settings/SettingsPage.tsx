@@ -4,14 +4,12 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Switch } from '../../components/ui/Switch';
 import { useToast } from '../../components/ui/Toast';
-import { Sun, Check } from 'lucide-react';
+import { Sun, Check, UserRound, ShieldCheck } from 'lucide-react';
 
 export function SettingsPage() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [workspaceName, setWorkspaceName] = useState('Workspace Prod (US East)');
-  const [apiBaseUrl, setApiBaseUrl] = useState(import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000');
   const [telemetryEnabled, setTelemetryEnabled] = useState(true);
 
   const handleSave = () => {
@@ -20,22 +18,57 @@ export function SettingsPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto w-full space-y-6 lg:space-y-8 animate-in fade-in duration-200">
-      {/* Header */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 text-[#78716c] font-mono text-[11px] uppercase tracking-wider">
-          <span>Configuration</span>
+          <span>Account</span>
           <span>/</span>
-          <span>System Settings</span>
+          <span>Preferences</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-semibold text-[#1e1b19] tracking-tight">
-          Workspace Settings
+          Settings
         </h1>
         <p className="text-xs sm:text-sm text-[#57534e]">
-          Manage workspace identity, theme preferences, API proxy endpoints, and execution quotas.
+          Manage your profile display, interface preferences, and safe runtime visibility.
         </p>
       </div>
 
       <div className="space-y-6">
+        <div className="p-5 rounded-xl bg-white border border-[#e7e5e4] shadow-xs space-y-4">
+          <div className="flex items-center gap-3 pb-3 border-b border-[#faf2ee]">
+            <img
+              src={user?.avatar_url || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.name || 'User')}`}
+              alt={user?.name || 'Profile'}
+              className="w-12 h-12 rounded-full object-cover border border-[#e7e5e4]"
+              referrerPolicy="no-referrer"
+            />
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-[#1e1b19] truncate">
+                {user?.name || 'Signed in user'}
+              </h2>
+              <p className="text-xs text-[#78716c] truncate">
+                {user?.email || 'No email available'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Name" disabled value={user?.name || ''} />
+            <Input label="Email" disabled value={user?.email || ''} />
+          </div>
+
+          <div className="rounded-xl border border-[#e7e5e4] bg-[#f9fafb] p-3 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white border border-[#e7e5e4] text-[#0f766e] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-[#1e1b19] block">Account Security</span>
+              <p className="text-xs text-[#57534e] mt-0.5">
+                Secrets, API keys, and backend gateway details stay server-side. They are not exposed in user settings.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Appearance Card */}
         <div className="p-5 rounded-xl bg-white border border-[#e7e5e4] shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-[#faf2ee]">
@@ -73,41 +106,26 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {/* Workspace Identity */}
         <div className="p-5 rounded-xl bg-white border border-[#e7e5e4] shadow-xs space-y-4">
           <h2 className="text-sm font-semibold text-[#1e1b19] pb-2 border-b border-[#faf2ee]">
-            Workspace Identity & API Gateway
+            Runtime Visibility
           </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Workspace Name"
-              value={workspaceName}
-              onChange={(e) => setWorkspaceName(e.target.value)}
-            />
-
-            <Input
-              label="Operator Email"
-              disabled
-              value={user?.email || 'elena@agenthub.dev'}
-              hint="Managed via master SSO"
-            />
-          </div>
-
-          <Input
-            label="FastAPI Backend Gateway URL"
-            hint="Default: http://127.0.0.1:8000"
-            mono
-            value={apiBaseUrl}
-            onChange={(e) => setApiBaseUrl(e.target.value)}
-          />
 
           <Switch
             label="Enable live telemetry streaming"
-            description="Streams token-by-token logs and tool call telemetry to the right rail inspector."
+            description="Shows live tool progress and response streaming inside chat views."
             checked={telemetryEnabled}
             onCheckedChange={setTelemetryEnabled}
           />
+
+          <div className="rounded-xl border border-[#e7e5e4] bg-white p-3 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#f0fdfa] border border-[#99f6e4] text-[#0f766e] flex items-center justify-center shrink-0">
+              <UserRound className="w-4 h-4" />
+            </div>
+            <p className="text-xs text-[#57534e]">
+              Workspace IDs, deployment names, and API gateway URLs are intentionally hidden from normal user settings.
+            </p>
+          </div>
         </div>
 
         {/* Save Button */}

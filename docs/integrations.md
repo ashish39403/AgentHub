@@ -20,19 +20,34 @@ Start small and safe:
 
 Already present:
 
-- `GET /api/v1/integrations/gmail/status`
+- `GET /api/v1/integrations`
+- `GET /api/v1/integrations/{provider}/status`
+- `POST /api/v1/integrations/{provider}/connect`
+- `POST /api/v1/integrations/{provider}/disconnect`
+- user-scoped `integration_connections` records
 - `app/integrations/composio_client.py`
-- Gmail summary tool with safe mock/read-only behavior
-- Slack/Notion/GitHub tool wrappers that return safe not-connected or confirmation-required outputs
+- Composio hosted connect-link creation
+- Composio connected-account status sync
+- Gmail summary tool with safe mock fallback and Composio read path
+- Notion/GitHub tool wrappers that return safe not-connected or confirmation-required outputs
 - Frontend integrations page
 
 Missing:
 
-- backend integration catalog endpoint for all providers
-- persistent user integration connection records
-- connect/disconnect endpoints
-- real Composio OAuth initiation/callback flow
-- frontend connected/disconnected state backed by real backend data
+- hosted OAuth callback verification endpoint
+- write-action confirmation endpoint for Notion/Slack/Gmail send flows
+- richer provider-specific tool schemas after real Composio account testing
+- integration run history UI
+
+Required environment:
+
+```text
+COMPOSIO_API_KEY=
+COMPOSIO_GMAIL_AUTH_CONFIG_ID=
+COMPOSIO_NOTION_AUTH_CONFIG_ID=
+COMPOSIO_GITHUB_AUTH_CONFIG_ID=
+COMPOSIO_CALLBACK_URL=
+```
 
 ## Integration Architecture
 

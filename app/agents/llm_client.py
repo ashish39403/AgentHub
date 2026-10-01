@@ -65,8 +65,68 @@ def format_messages_for_chat_completion(messages: list[AgentRuntimeMessage]) -> 
 
 def format_message_for_chat_completion(message: AgentRuntimeMessage) -> dict[str, str]:
     if message.role == "tool":
-        return {"role": "user", "content": f"Tool {message.name} returned: {message.content}"}
+        return {"role": "user", "content": format_tool_message_for_model(message)}
     return {"role": message.role, "content": message.content}
+
+
+def format_tool_message_for_model(message: AgentRuntimeMessage) -> str:
+    tool_name = message.name or "tool"
+    try:
+        payload = json.loads(message.content)
+    except json.JSONDecodeError:
+        return (
+            f"Tool result from {tool_name}:\n"
+            f"{message.content}\n\n"
+            "Use this result to answer naturally. Do not expose raw tool text."
+        )
+
+    if not isinstance(payload, dict):
+        return (
+            f"Tool result from {tool_name}:\n"
+            f"{message.content}\n\n"
+            "Use this result to answer naturally. Do not expose raw tool text."
+        )
+
+    if tool_name == "web_search":
+        return format_search_tool_message(payload)
+
+    return (
+        f"Tool result from {tool_name}.\n"
+        f"Status: {payload.get('status', 'succeeded')}\n"
+        f"Summary: {payload.get('summary') or payload.get('headline') or payload.get('message') or 'Tool completed.'}\n\n"
+        "Use this result to answer naturally. Do not expose raw JSON, internal status keys, or debug fields."
+    )
+
+
+def format_search_tool_message(payload: dict[str, Any]) -> str:
+    results = payload.get("results")
+    if not isinstance(results, list) or not results:
+        return (
+            "Search tool returned no usable sources.\n"
+            "Say exactly: 'Search returned no results for this query.' Then suggest one refined search query."
+        )
+
+    lines = [
+        "Search tool returned source data for the final answer.",
+        f"Query: {payload.get('query', '')}",
+        f"Status: {payload.get('status', 'succeeded')}",
+        "Instructions: Use only these sources for cited claims. Do not reveal raw tool JSON or backend status fields.",
+        "",
+        "Sources:",
+    ]
+    for index, result in enumerate(results, start=1):
+        if not isinstance(result, dict):
+            continue
+        title = str(result.get("title") or "Untitled source")
+        url = str(result.get("url") or "")
+        snippet = str(result.get("snippet") or "").strip()
+        lines.append(f"[{index}] {title}")
+        if url:
+            lines.append(f"URL: {url}")
+        if snippet:
+            lines.append(f"Snippet: {snippet}")
+        lines.append("")
+    return "\n".join(lines).strip()
 
 
 def format_tool_for_chat_completion(tool: ToolDefinition) -> dict[str, Any]:

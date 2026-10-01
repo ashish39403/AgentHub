@@ -621,8 +621,15 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
   const singleConvMatch = endpoint.match(/^\/conversations\/([^/]+)$/);
   if (singleConvMatch) {
     const convId = singleConvMatch[1];
-    const conv = mockDb.conversations.find((c) => c.id === convId);
-    if (!conv) throw new ApiError('Conversation not found', 'NOT_FOUND', 404);
+    const convIndex = mockDb.conversations.findIndex((c) => c.id === convId);
+    if (convIndex === -1) throw new ApiError('Conversation not found', 'NOT_FOUND', 404);
+    if (method === 'DELETE') {
+      mockDb.conversations.splice(convIndex, 1);
+      delete mockDb.messages[convId];
+      mockDb.save();
+      return undefined as T;
+    }
+    const conv = mockDb.conversations[convIndex];
     return {
       ...conv,
       messages: mockDb.messages[convId] || [],
@@ -842,7 +849,7 @@ export const api = {
       body: JSON.stringify(toBackendAgentPayload(input)),
     }).then(normalizeAgent),
   deleteAgent: (id: string) =>
-    request<{ success: boolean }>(`/agents/${id}`, { method: 'DELETE' }),
+    request<void>(`/agents/${id}`, { method: 'DELETE' }),
 
   // Conversations & Chat
   getConversations: (agentId?: string): Promise<Conversation[]> =>

@@ -4,12 +4,13 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api-client';
+import { ApiError, api } from '../../lib/api-client';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
+import { Agent } from '../../types';
 import { Cpu, ArrowLeft, Trash2, Sparkles, Check } from 'lucide-react';
 
 const agentFormSchema = z.object({
@@ -115,7 +116,11 @@ export function AgentFormPage() {
   const createMutation = useMutation({
     mutationFn: (data: AgentFormValues) => api.createAgent(data),
     onSuccess: (newAgent) => {
+      queryClient.setQueryData<Agent[]>(['agents-list'], (old) =>
+        old ? [newAgent, ...old.filter((agent) => agent.id !== newAgent.id)] : [newAgent]
+      );
       queryClient.invalidateQueries({ queryKey: ['agents-list'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       toast.success('Agent initialized', `Created "${newAgent.name}" successfully.`);
       navigate('/agents');
     },
@@ -139,10 +144,38 @@ export function AgentFormPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteAgent(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents-list'] });
-      toast.success('Agent deleted');
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['agents-list'] });
+      const previousAgents = queryClient.getQueryData<Agent[]>(['agents-list']);
+
+      queryClient.setQueryData<Agent[]>(['agents-list'], (old) =>
+        old ? old.filter((agent) => agent.id !== id) : old
+      );
+      queryClient.removeQueries({ queryKey: ['agent-detail', id] });
+      queryClient.removeQueries({ queryKey: ['agent-chat-detail', id] });
+      queryClient.removeQueries({ queryKey: ['agent-conversations', id] });
       navigate('/agents');
+
+      return { previousAgents };
+    },
+    onSuccess: () => {
+      toast.success('Agent deleted');
+    },
+    onError: (error, _variables, context) => {
+      if (error instanceof ApiError && error.status === 404) {
+        toast.info('Agent was already removed.');
+        return;
+      }
+      if (context?.previousAgents) {
+        queryClient.setQueryData(['agents-list'], context.previousAgents);
+      }
+      toast.error('Delete failed', 'Could not delete this agent.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['agents-list'] });
+      queryClient.invalidateQueries({ queryKey: ['routines-list'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-recent-runs'] });
     },
   });
 
