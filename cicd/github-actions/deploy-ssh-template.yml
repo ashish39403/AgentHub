@@ -1,0 +1,36 @@
+name: Deploy Backend Over SSH
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy, for example latest or sha-abc123"
+        required: true
+        default: latest
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/agenthub-backend
+
+jobs:
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            cd "${{ secrets.DEPLOY_PATH }}"
+            export BACKEND_IMAGE="${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}"
+            docker compose pull api
+            docker compose up -d api
+            docker image prune -f
