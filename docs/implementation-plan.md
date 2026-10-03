@@ -126,16 +126,21 @@ Planned V2 sequence:
 │   │   └── llm_client.py
 │   ├── tools/
 │   │   ├── __init__.py
+│   │   ├── README.md
+│   │   ├── action_policy.py
+│   │   ├── context.py
 │   │   ├── registry.py
-│   │   ├── internship_research.py
-│   │   ├── gmail_summary.py
 │   │   ├── datetime_tool.py
-│   │   └── draft_message.py
+│   │   ├── gmail_tools.py
+│   │   ├── integration_tools.py
+│   │   ├── internal_tools.py
+│   │   ├── memory_tools.py
+│   │   └── search_tool.py
 │   ├── integrations/
 │   │   ├── __init__.py
+│   │   ├── README.md
 │   │   ├── composio_client.py
-│   │   ├── gmail.py
-│   │   └── search.py
+│   │   └── gmail.py
 │   └── scheduler/
 │       ├── __init__.py
 │       ├── scheduler.py

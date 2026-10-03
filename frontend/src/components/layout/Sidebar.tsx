@@ -8,7 +8,6 @@ import {
   LayoutGrid,
   Cpu,
   Clock,
-  Puzzle,
   Sliders,
   Plus,
   ChevronsUpDown,
@@ -33,7 +32,6 @@ export function Sidebar({ onNewAgentClick, onCloseMobile }: SidebarProps) {
     { name: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
     { name: 'Agents', path: '/agents', icon: Cpu },
     { name: 'Routines', path: '/routines', icon: Clock },
-    { name: 'Integrations', path: '/integrations', icon: Puzzle },
     { name: 'Settings', path: '/settings', icon: Sliders },
   ];
 

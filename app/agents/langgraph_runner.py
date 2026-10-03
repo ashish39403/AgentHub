@@ -8,7 +8,9 @@ from app.agents.execution import (
     run_tool_call,
     save_assistant_message,
 )
+from app.agents.guardrails import guardrail_assistant_response
 from app.agents.llm_client import LLMClient
+from app.agents.state import attach_state_context_message
 from app.agents.types import AgentRunState, LLMResponse
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -61,11 +63,13 @@ async def run_agent_graph(
 
 def build_agent_graph() -> Any:
     builder = StateGraph(AgentGraphState)
+    builder.add_node("analyze_task_timing", analyze_task_timing_node)
     builder.add_node("run_forced_tool", run_forced_tool_node)
     builder.add_node("call_model", call_model_node)
     builder.add_node("execute_tool", execute_tool_node)
     builder.add_node("save_final_answer", save_final_answer_node)
-    builder.set_entry_point("run_forced_tool")
+    builder.set_entry_point("analyze_task_timing")
+    builder.add_edge("analyze_task_timing", "run_forced_tool")
     builder.add_edge("run_forced_tool", "call_model")
     builder.add_conditional_edges(
         "call_model",
@@ -79,6 +83,11 @@ def build_agent_graph() -> Any:
     builder.add_edge("execute_tool", "call_model")
     builder.add_edge("save_final_answer", END)
     return builder.compile()
+
+
+async def analyze_task_timing_node(state: AgentGraphState) -> dict[str, Any]:
+    attach_state_context_message(state["run_state"])
+    return {"run_state": state["run_state"]}
 
 
 async def run_forced_tool_node(state: AgentGraphState) -> dict[str, Any]:
@@ -97,7 +106,10 @@ async def run_forced_tool_node(state: AgentGraphState) -> dict[str, Any]:
 
 async def call_model_node(state: AgentGraphState) -> dict[str, Any]:
     run_state = state["run_state"]
-    available_tools = [] if run_state.tool_results else state["tool_registry"].definitions(run_state.enabled_tools)
+    if run_state.tool_results or (run_state.timing and not run_state.timing.should_execute_now):
+        available_tools = []
+    else:
+        available_tools = state["tool_registry"].definitions(run_state.enabled_tools)
     llm_response = await state["llm_client"].complete(
         messages=run_state.runtime_messages,
         tools=available_tools,
@@ -136,7 +148,7 @@ async def execute_tool_node(state: AgentGraphState) -> dict[str, Any]:
 
 async def save_final_answer_node(state: AgentGraphState) -> dict[str, Any]:
     llm_response = state["llm_response"]
-    content = llm_response.content or ""
+    content = guardrail_assistant_response(llm_response.content or "")
     run_state = state["run_state"]
     run_state.final_answer = content
     assistant_message = await save_assistant_message(

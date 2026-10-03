@@ -43,6 +43,9 @@ async def run_forced_tool_if_needed(
     tool_registry: ToolRegistry,
     tool_context: ToolContext,
 ) -> Message | None:
+    if state.timing and not state.timing.should_execute_now:
+        return None
+
     forced_tool_call = select_forced_tool_call(state.input_message, state.enabled_tools)
     if forced_tool_call is None:
         return None

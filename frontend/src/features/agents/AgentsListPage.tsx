@@ -122,7 +122,7 @@ export function AgentsListPage() {
       title: 'Competitive Intel Agent',
       description: 'Parses public release notes, SEC filings, and pricing changes into structured JSON updates.',
       toolsCount: 3,
-      tools: ['web_search', 'parse_job_requirements', 'save_report'],
+      tools: ['web_search', 'summarize_text', 'save_memory'],
       prompt: 'Track quarterly updates and new pricing tiers across competitive developer platforms.',
     },
     {
@@ -130,7 +130,7 @@ export function AgentsListPage() {
       title: 'Customer Feedback Synthesizer',
       description: 'Clusters Intercom, Discord, and Zendesk tickets to generate recurring friction matrices.',
       toolsCount: 4,
-      tools: ['slack_notify', 'gmail_read', 'save_report', 'date_time'],
+      tools: ['send_slack_message', 'gmail_summary', 'save_memory', 'datetime'],
       prompt: 'Synthesize unread bug reports and feature requests from support channels into a weekly priority matrix.',
     },
     {
@@ -138,7 +138,7 @@ export function AgentsListPage() {
       title: 'Meeting Action Extractor',
       description: 'Transforms call transcripts into Linear tickets and Slack alerts with clear deliverables.',
       toolsCount: 2,
-      tools: ['draft_message', 'slack_notify'],
+      tools: ['draft_message', 'send_slack_message'],
       prompt: 'Extract action items, assignees, and deadlines from meeting notes and format for delivery.',
     },
   ];

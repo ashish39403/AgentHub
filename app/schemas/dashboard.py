@@ -11,7 +11,6 @@ class DashboardSummaryResponse(BaseModel):
     succeeded_routine_runs_count: int
     failed_routine_runs_count: int
     pending_action_items_count: int
-    connected_integrations_count: int
     last_run_at: datetime | None
 
 

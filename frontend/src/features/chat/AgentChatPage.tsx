@@ -33,7 +33,7 @@ const hasApiStatus = (error: unknown, status: number) =>
 
 export function AgentChatPage() {
   const { id: agentId } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const convParam = searchParams.get('conv');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -48,6 +48,7 @@ export function AgentChatPage() {
   const [showTelemetry, setShowTelemetry] = useState(true);
   const [collapsedTools, setCollapsedTools] = useState<Record<string, boolean>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
+  const deletingConversationIdsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Queries
@@ -61,12 +62,31 @@ export function AgentChatPage() {
     queryFn: () => (agentId ? api.getConversations(agentId) : []),
   });
 
+  const selectConversation = useCallback((conversationId: string | null) => {
+    setActiveConvId(conversationId);
+    setSearchParams(conversationId ? { conv: conversationId } : {}, { replace: true });
+  }, [setSearchParams]);
+
+  const upsertConversationLocally = useCallback((conversation: Conversation) => {
+    queryClient.setQueryData<Conversation[]>(['agent-conversations', agentId], (old) => {
+      const existing = old || conversations || [];
+      return [conversation, ...existing.filter((item) => item.id !== conversation.id)];
+    });
+  }, [agentId, conversations, queryClient]);
+
+  useEffect(() => {
+    const hasConversation = conversations?.some((conversation) => conversation.id === convParam);
+    if (convParam && convParam !== activeConvId && hasConversation) {
+      setActiveConvId(convParam);
+    }
+  }, [convParam, activeConvId, conversations]);
+
   // Set initial active conversation if not set
   useEffect(() => {
     if (!activeConvId && conversations && conversations.length > 0) {
-      setActiveConvId(conversations[0].id);
+      selectConversation(conversations[0].id);
     }
-  }, [conversations, activeConvId]);
+  }, [conversations, activeConvId, selectConversation]);
 
   const removeConversationLocally = useCallback((conversationId: string) => {
     const existing =
@@ -79,11 +99,11 @@ export function AgentChatPage() {
     queryClient.removeQueries({ queryKey: ['conversation-messages', conversationId] });
 
     if (activeConvId === conversationId) {
-      setActiveConvId(remaining[0]?.id ?? null);
+      selectConversation(remaining[0]?.id ?? null);
     }
 
     return remaining;
-  }, [activeConvId, agentId, conversations, queryClient]);
+  }, [activeConvId, agentId, conversations, queryClient, selectConversation]);
 
   const {
     data: currentConversation,
@@ -121,8 +141,9 @@ export function AgentChatPage() {
   const createConvMutation = useMutation({
     mutationFn: () => api.createConversation(agentId!, 'New Exploration Session'),
     onSuccess: (newConv) => {
+      upsertConversationLocally(newConv);
+      selectConversation(newConv.id);
       queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
-      setActiveConvId(newConv.id);
       toast.success('Session started', 'New conversation workspace created.');
     },
   });
@@ -137,6 +158,7 @@ export function AgentChatPage() {
       }
     },
     onMutate: async (deletedConversationId) => {
+      deletingConversationIdsRef.current.add(deletedConversationId);
       await queryClient.cancelQueries({ queryKey: ['agent-conversations', agentId] });
       await queryClient.cancelQueries({ queryKey: ['conversation-messages', deletedConversationId] });
 
@@ -160,6 +182,11 @@ export function AgentChatPage() {
         toast.info('Conversation was already removed.');
         return;
       }
+      if (hasApiStatus(error, 0)) {
+        removeConversationLocally(deletedConversationId);
+        toast.info('Conversation removed locally', 'Backend confirmation was unavailable.');
+        return;
+      }
 
       if (context?.previousConversations) {
         queryClient.setQueryData(['agent-conversations', agentId], context.previousConversations);
@@ -170,10 +197,20 @@ export function AgentChatPage() {
 
       toast.error('Delete failed', 'Could not delete this conversation.');
     },
-    onSettled: () => {
+    onSettled: (_data, _error, deletedConversationId) => {
+      if (deletedConversationId) {
+        deletingConversationIdsRef.current.delete(deletedConversationId);
+      }
       queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
     },
   });
+
+  const handleDeleteConversation = (conversationId: string) => {
+    if (isStreaming || deleteConvMutation.isPending || deletingConversationIdsRef.current.has(conversationId)) {
+      return;
+    }
+    deleteConvMutation.mutate(conversationId);
+  };
 
   const handleSend = async () => {
     if (!inputMessage.trim() || isStreaming || !agentId) return;
@@ -192,7 +229,8 @@ export function AgentChatPage() {
       try {
         const newConversation = await api.createConversation(agentId, userText.slice(0, 60) || 'New Exploration Session');
         conversationId = newConversation.id;
-        setActiveConvId(newConversation.id);
+        upsertConversationLocally(newConversation);
+        selectConversation(newConversation.id);
         queryClient.invalidateQueries({ queryKey: ['agent-conversations', agentId] });
       } catch (err) {
         setIsStreaming(false);
@@ -290,7 +328,7 @@ export function AgentChatPage() {
               return (
                 <div
                   key={conv.id}
-                  onClick={() => setActiveConvId(conv.id)}
+                  onClick={() => selectConversation(conv.id)}
                   className={`group p-2.5 rounded-lg border transition-all cursor-pointer ${
                     isActive
                       ? 'bg-white border-[#0f766e] shadow-xs'
@@ -308,9 +346,7 @@ export function AgentChatPage() {
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
-                        if (!isStreaming) {
-                          deleteConvMutation.mutate(conv.id);
-                        }
+                        handleDeleteConversation(conv.id);
                       }}
                       disabled={isStreaming || deleteConvMutation.isPending}
                       className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-[#6b7280] hover:text-[#dc2626] hover:bg-[#fee2e2] disabled:opacity-40 transition-all cursor-pointer"
@@ -366,7 +402,7 @@ export function AgentChatPage() {
               <button
                 onClick={() => {
                   if (activeConvId && !isStreaming) {
-                    deleteConvMutation.mutate(activeConvId);
+                    handleDeleteConversation(activeConvId);
                   }
                 }}
                 disabled={!activeConvId || isStreaming || deleteConvMutation.isPending}
@@ -576,7 +612,7 @@ export function AgentChatPage() {
               <div className="px-3 pb-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => setInputMessage((prev) => prev + ' /internship_research ')}
+                    onClick={() => setInputMessage((prev) => prev + ' /web_search ')}
                     className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#f3f4f6] hover:bg-[#e5e7eb] text-[#6b7280] hover:text-[#111827] font-mono text-[11px] transition-colors border border-[#e5e7eb] cursor-pointer"
                   >
                     <AtSign className="w-3 h-3" />
@@ -682,7 +718,7 @@ export function AgentChatPage() {
                   Tools in Execution Scope
                 </span>
                 <div className="flex flex-wrap gap-1">
-                  {(agent?.tools || ['internship_research', 'gmail_read', 'save_report', 'draft_message']).map(
+                  {(agent?.tools || ['web_search', 'gmail_summary', 'save_memory', 'draft_message']).map(
                     (tool) => (
                       <span
                         key={tool}

@@ -36,16 +36,6 @@ def create_conversation(client: TestClient, headers: dict[str, str], agent_id: s
     return response.json()
 
 
-def test_gmail_status_endpoint(auth_client: TestClient) -> None:
-    auth = register_user(auth_client, email="gmail-status@example.com")
-
-    response = auth_client.get("/api/v1/integrations/gmail/status", headers=auth_headers(auth))
-
-    assert response.status_code == 200
-    assert response.json()["provider"] == "gmail"
-    assert response.json()["connected"] is False
-
-
 def test_gmail_summary_tool_returns_structured_read_only_output(auth_client: TestClient) -> None:
     auth = register_user(auth_client, email="gmail-summary@example.com")
     headers = auth_headers(auth)

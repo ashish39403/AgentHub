@@ -20,7 +20,6 @@ from app.schemas.dashboard import (
     DashboardRecentRunsResponse,
     DashboardSummaryResponse,
 )
-from app.services.integration_service import list_user_integrations
 
 
 PREVIEW_LENGTH = 180
@@ -49,7 +48,6 @@ async def get_dashboard_summary(session: AsyncSession, *, user: User) -> Dashboa
         .where(RoutineRun.user_id == user.id, RoutineRun.status == RoutineRunStatus.FAILED),
     )
     pending_action_items_count = len(await build_action_items(session, user_id=user.id, limit=100))
-    integrations = await list_user_integrations(session, user=user)
     last_run_at = await session.scalar(
         select(func.max(RoutineRun.started_at)).where(RoutineRun.user_id == user.id)
     )
@@ -61,7 +59,6 @@ async def get_dashboard_summary(session: AsyncSession, *, user: User) -> Dashboa
         succeeded_routine_runs_count=succeeded_runs_count,
         failed_routine_runs_count=failed_runs_count,
         pending_action_items_count=pending_action_items_count,
-        connected_integrations_count=sum(1 for integration in integrations.integrations if integration.connected),
         last_run_at=last_run_at,
     )
 

@@ -71,7 +71,7 @@ export function AgentFormPage() {
       instructions: '',
       model: 'google/gemini-2.5-flash',
       temperature: 0.2,
-      tools: ['internship_research', 'draft_message'],
+      tools: ['web_search', 'draft_message'],
       version: 'v1.0',
       status: 'active',
     },
@@ -270,7 +270,7 @@ export function AgentFormPage() {
           <Textarea
             label="System Instructions & Operational Boundaries"
             hint="Guidance on behavior, reasoning steps, tool calling constraints"
-            placeholder="You are an autonomous talent research assistant. Use the internship_research tool to query verified career boards..."
+            placeholder="You are an autonomous talent research assistant. Use web_search to find verified opportunities, summarize clearly, and save useful context when asked..."
             rows={5}
             mono
             error={errors.instructions?.message}

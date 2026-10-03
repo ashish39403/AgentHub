@@ -12,7 +12,6 @@ import { AgentChatPage } from '../features/chat/AgentChatPage';
 import { RoutinesListPage } from '../features/routines/RoutinesListPage';
 import { RoutineFormPage } from '../features/routines/RoutineFormPage';
 import { RoutineRunDetailsPage } from '../features/routines/RoutineRunDetailsPage';
-import { IntegrationsPage } from '../features/integrations/IntegrationsPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 
 export function AppRoutes() {
@@ -59,8 +58,6 @@ export function AppRoutes() {
             element={<RoutineRunDetailsPage />}
           />
 
-          {/* Ecosystem */}
-          <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>

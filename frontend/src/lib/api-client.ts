@@ -11,7 +11,6 @@ import {
   ToolActionLog,
   ActionItem,
   DashboardSummary,
-  Integration,
   User,
   AuthResponse,
   ApiErrorResponse,
@@ -27,7 +26,6 @@ import {
   initialSummary,
   initialConversations,
   initialMessages,
-  initialIntegrations,
   mockUser,
 } from './mock-data';
 
@@ -85,7 +83,6 @@ class MockDatabase {
   summary: DashboardSummary;
   conversations: Conversation[];
   messages: Record<string, Message[]>;
-  integrations: Integration[];
   currentUser: User;
 
   constructor() {
@@ -97,7 +94,6 @@ class MockDatabase {
     this.summary = this.load('agenthub_mock_summary', initialSummary);
     this.conversations = this.load('agenthub_mock_conversations', initialConversations);
     this.messages = this.load('agenthub_mock_messages', initialMessages);
-    this.integrations = this.load('agenthub_mock_integrations', initialIntegrations);
     this.currentUser = mockUser;
   }
 
@@ -120,7 +116,6 @@ class MockDatabase {
       localStorage.setItem('agenthub_mock_action_items', JSON.stringify(this.actionItems));
       localStorage.setItem('agenthub_mock_conversations', JSON.stringify(this.conversations));
       localStorage.setItem('agenthub_mock_messages', JSON.stringify(this.messages));
-      localStorage.setItem('agenthub_mock_integrations', JSON.stringify(this.integrations));
     } catch {
       // ignore
     }
@@ -135,7 +130,6 @@ class MockDatabase {
     this.summary = { ...initialSummary };
     this.conversations = [...initialConversations];
     this.messages = { ...initialMessages };
-    this.integrations = [...initialIntegrations];
     this.save();
   }
 }
@@ -277,12 +271,7 @@ function normalizeAuthResponse(raw: any): AuthResponse {
   return normalized;
 }
 
-const backendToFrontendTool: Record<string, string> = {
-  datetime: 'date_time',
-  gmail_summary: 'gmail_read',
-  send_slack_message: 'slack_notify',
-  github_issue_search: 'github_api',
-};
+const backendToFrontendTool: Record<string, string> = {};
 
 const frontendToBackendTool: Record<string, string> = {
   internship_research: 'web_search',
@@ -447,26 +436,6 @@ function normalizeActionItem(raw: any): ActionItem {
     action_label: requiresConfirmation ? 'Review' : undefined,
     secondary_action_label: 'Dismiss',
     created_at: raw.created_at || new Date().toISOString(),
-  };
-}
-
-function normalizeIntegration(raw: any): Integration {
-  const connected = raw.connected || raw.status === 'connected';
-  return {
-    id: raw.id || raw.provider || 'gmail',
-    name: raw.name || `${String(raw.provider || 'gmail').toUpperCase()} Integration`,
-    provider: raw.provider || 'gmail',
-    description: raw.description || raw.message || 'External integration status.',
-    status: connected ? 'connected' : raw.status || 'disconnected',
-    scopes: raw.scopes || [],
-    icon: raw.icon || raw.provider || 'gmail',
-    account_email: raw.account_email,
-    last_synced_at: raw.last_synced_at,
-    expires_at: raw.expires_at,
-    configured: Boolean(raw.configured),
-    connected,
-    message: raw.message,
-    connect_url: raw.connect_url,
   };
 }
 
@@ -658,7 +627,7 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
       tool_calls: [
         {
           id: `tc_${Date.now()}`,
-          tool_name: 'parse_job_requirements',
+          tool_name: 'summarize_text',
           input: { query: body.content },
           output: { status: '200 OK', verified: true },
           status: 'succeeded',
@@ -736,7 +705,7 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
       trigger: 'manual',
       duration: 'In progress...',
       started_at: new Date().toISOString(),
-      tools_executed: ['internship_research', 'save_report'],
+      tools_executed: ['web_search', 'save_memory'],
       output: `Manual run dispatched for routine "${routine.name}". Running execution graph across workers.`,
     };
     mockDb.runs.unshift(newRun);
@@ -761,40 +730,6 @@ function handleMockRequest<T>(endpoint: string, options: RequestInit): T {
   if (routineRunsMatch) {
     const routineId = routineRunsMatch[1];
     return mockDb.runs.filter((r) => r.routine_id === routineId) as unknown as T;
-  }
-
-  // Integrations
-  if (endpoint === '/integrations') {
-    return mockDb.integrations as unknown as T;
-  }
-
-  const integrationActionMatch = endpoint.match(/^\/integrations\/([^/]+)\/(connect|disconnect)$/);
-  if (integrationActionMatch) {
-    const provider = integrationActionMatch[1];
-    const action = integrationActionMatch[2];
-    const intItem = mockDb.integrations.find((i) => i.provider === provider || i.id === provider);
-    if (!intItem) throw new ApiError('Integration not found', 'NOT_FOUND', 404);
-    intItem.status = action === 'connect' ? 'pending' : 'disconnected';
-    intItem.connected = false;
-    intItem.message =
-      action === 'connect'
-        ? 'Mock connection requested. Complete OAuth before agents can use this provider.'
-        : 'Mock integration disconnected.';
-    mockDb.save();
-    return intItem as unknown as T;
-  }
-
-  const integrationMatch = endpoint.match(/^\/integrations\/([^/]+)$/);
-  if (integrationMatch) {
-    const intId = integrationMatch[1];
-    const intItem = mockDb.integrations.find((i) => i.id === intId);
-    if (!intItem) throw new ApiError('Integration not found', 'NOT_FOUND', 404);
-    if (method === 'PATCH') {
-      Object.assign(intItem, body);
-      mockDb.save();
-      return intItem as unknown as T;
-    }
-    return intItem as unknown as T;
   }
 
   // Default fallback
@@ -908,18 +843,6 @@ export const api = {
     ),
   getTools: (): Promise<ToolDefinition[]> =>
     request<any>('/tools').then((raw) => (Array.isArray(raw) ? raw : raw.tools || []).map(normalizeToolDefinition)),
-
-  // Integrations
-  getIntegrations: () =>
-    request<any>('/integrations').then((raw) =>
-      (Array.isArray(raw) ? raw : raw.integrations || []).map(normalizeIntegration)
-    ),
-  connectIntegration: (provider: string) =>
-    request<unknown>(`/integrations/${provider}/connect`, { method: 'POST' }).then(normalizeIntegration),
-  disconnectIntegration: (provider: string) =>
-    request<unknown>(`/integrations/${provider}/disconnect`, { method: 'POST' }).then(normalizeIntegration),
-  updateIntegration: (id: string, patch: Partial<Integration>) =>
-    request<Integration>(`/integrations/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 };
 
 /**
@@ -962,14 +885,14 @@ export async function streamMessageHelper({
       if (onToolCall) {
         onToolCall({
           id: `tc_stream_${Date.now()}_1`,
-          tool_name: 'internship_research',
+          tool_name: 'web_search',
           input: { query: content },
           status: 'running',
         });
         await new Promise((r) => setTimeout(r, 600));
         onToolCall({
           id: `tc_stream_${Date.now()}_1`,
-          tool_name: 'internship_research',
+          tool_name: 'web_search',
           input: { query: content },
           output: { status: '200 OK (8 matches found)' },
           status: 'succeeded',
@@ -1005,7 +928,7 @@ The full synthesis report has been formatted and stored in the workspace registr
         tool_calls: [
           {
             id: `tc_stream_${Date.now()}_1`,
-            tool_name: 'internship_research',
+            tool_name: 'web_search',
             input: { query: content },
             output: { status: '200 OK (8 matches found)' },
             status: 'succeeded',

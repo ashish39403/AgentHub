@@ -177,24 +177,6 @@ export interface DashboardSummary {
   runs_trend_data: number[];
 }
 
-// Integrations
-export interface Integration {
-  id: string;
-  name: string;
-  provider: 'gmail' | 'github' | 'slack' | 'linear' | 'notion' | 'custom_webhook';
-  description: string;
-  status: 'connected' | 'disconnected' | 'pending' | 'expiring_soon' | 'error';
-  scopes: string[];
-  last_synced_at?: string;
-  expires_at?: string;
-  icon: string;
-  account_email?: string;
-  configured?: boolean;
-  connected?: boolean;
-  message?: string;
-  connect_url?: string;
-}
-
 // Standard API Error
 export interface ApiErrorResponse {
   error: {

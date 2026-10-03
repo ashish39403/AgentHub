@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -44,6 +45,23 @@ class ToolExecutionResult(BaseModel):
         return self.error is None
 
 
+class AgentTaskState(BaseModel):
+    kind: Literal["chat", "scheduled_routine", "schedule_request", "tool_task"] = "chat"
+    title: str | None = None
+    goal: str
+    requires_timing_decision: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentTimingDecision(BaseModel):
+    mode: Literal["run_now", "schedule_requested", "scheduled_run"] = "run_now"
+    timezone: str = "UTC"
+    schedule_hint: str | None = None
+    should_execute_now: bool = True
+    reason: str
+    decided_at: datetime
+
+
 class AgentRunState(BaseModel):
     user_id: UUID
     agent_id: UUID
@@ -52,6 +70,8 @@ class AgentRunState(BaseModel):
     input_message: str
     selected_model: str | None = None
     enabled_tools: list[str] = Field(default_factory=list)
+    task: AgentTaskState | None = None
+    timing: AgentTimingDecision | None = None
     runtime_messages: list[AgentRuntimeMessage] = Field(default_factory=list)
     tool_results: list[ToolExecutionResult] = Field(default_factory=list)
     final_answer: str | None = None
