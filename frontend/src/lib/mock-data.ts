@@ -26,7 +26,7 @@ export const availableTools: ToolDefinition[] = [
     id: 'web_search',
     name: 'web_search',
     displayName: 'Web Search',
-    description: 'Searches the web through Serper with optional fallback handling',
+    description: 'Searches the web for current information',
     category: 'search',
     isBuiltIn: true,
   },
@@ -227,7 +227,7 @@ export const initialRecentRuns: RoutineRun[] = [
     started_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     finished_at: new Date(Date.now() - 24 * 60 * 60 * 1000 + 32000).toISOString(),
     tools_executed: ['web_search'],
-    error: 'Failed at tool web_search: HTTP 429 rate limit exceeded from search provider.',
+    error: 'Web search returned a temporary rate limit. Retry later or narrow the query.',
   },
   {
     id: 'run_1041',
@@ -296,7 +296,7 @@ export const initialActionItems: ActionItem[] = [
   {
     id: 'act_02',
     title: 'Routine failed: Weekly internship report',
-    description: 'Failed at tool web_search: HTTP 429 rate limit exceeded from search provider.',
+    description: 'Web search returned a temporary rate limit. Retry later or narrow the query.',
     level: 'error',
     badge_text: 'Run #1042',
     target_url: '/routines/rtn_weekly_scout/runs/run_1042',

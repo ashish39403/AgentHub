@@ -10,7 +10,7 @@ import { Textarea } from '../../components/ui/Textarea';
 import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
-import { Agent } from '../../types';
+import { Agent, Routine } from '../../types';
 import { Cpu, ArrowLeft, Trash2, Sparkles, Check } from 'lucide-react';
 
 const agentFormSchema = z.object({
@@ -146,17 +146,22 @@ export function AgentFormPage() {
     mutationFn: () => api.deleteAgent(id!),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['agents-list'] });
+      await queryClient.cancelQueries({ queryKey: ['routines-list'] });
       const previousAgents = queryClient.getQueryData<Agent[]>(['agents-list']);
+      const previousRoutines = queryClient.getQueryData<Routine[]>(['routines-list']);
 
       queryClient.setQueryData<Agent[]>(['agents-list'], (old) =>
         old ? old.filter((agent) => agent.id !== id) : old
+      );
+      queryClient.setQueryData<Routine[]>(['routines-list'], (old) =>
+        old ? old.filter((routine) => routine.agent_id !== id) : old
       );
       queryClient.removeQueries({ queryKey: ['agent-detail', id] });
       queryClient.removeQueries({ queryKey: ['agent-chat-detail', id] });
       queryClient.removeQueries({ queryKey: ['agent-conversations', id] });
       navigate('/agents');
 
-      return { previousAgents };
+      return { previousAgents, previousRoutines };
     },
     onSuccess: () => {
       toast.success('Agent deleted');
@@ -168,6 +173,9 @@ export function AgentFormPage() {
       }
       if (context?.previousAgents) {
         queryClient.setQueryData(['agents-list'], context.previousAgents);
+      }
+      if (context?.previousRoutines) {
+        queryClient.setQueryData(['routines-list'], context.previousRoutines);
       }
       toast.error('Delete failed', 'Could not delete this agent.');
     },

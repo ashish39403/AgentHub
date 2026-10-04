@@ -11,13 +11,16 @@ import { useToast } from '../../components/ui/Toast';
 import { describeCronExpression, formatRelativeTime } from '../../lib/utils';
 import {
   Clock,
+  Loader2,
   Plus,
   Play,
+  Sparkles,
   Edit2,
   Trash2,
   Cpu,
   Search,
 } from 'lucide-react';
+import type { Agent, AgentCreateInput, RoutineCreateInput } from '../../types';
 
 export function RoutinesListPage() {
   const navigate = useNavigate();
@@ -60,9 +63,52 @@ export function RoutinesListPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteRoutine(id),
+    onMutate: async (deletedRoutineId) => {
+      await queryClient.cancelQueries({ queryKey: ['routines-list'] });
+      const previousRoutines = queryClient.getQueryData<typeof routines>(['routines-list']);
+
+      queryClient.setQueryData(['routines-list'], (old: typeof routines) =>
+        (old || routines || []).filter((routine) => routine.id !== deletedRoutineId)
+      );
+
+      return { previousRoutines };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routines-list'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-recent-runs'] });
       toast.success('Routine removed');
+    },
+    onError: (_error, _deletedRoutineId, context) => {
+      if (context?.previousRoutines) {
+        queryClient.setQueryData(['routines-list'], context.previousRoutines);
+      }
+      toast.error('Delete failed', 'Could not delete this routine.');
+    },
+  });
+
+  const quickRoutineMutation = useMutation({
+    mutationFn: async () => {
+      const existingAgent = agents.find((agent) => agent.name === routineStarterAgent.name);
+      const targetAgent = existingAgent || await api.createAgent(routineStarterAgent);
+      const existingRoutine = (routines || []).find(
+        (routine) => routine.name === routineStarter.name && routine.agent_id === targetAgent.id
+      );
+      const targetRoutine = existingRoutine || await api.createRoutine(buildRoutineStarter(targetAgent));
+
+      const run = await api.triggerRoutineRun(targetRoutine.id);
+      return { routine: targetRoutine, run };
+    },
+    onSuccess: ({ routine, run }) => {
+      queryClient.invalidateQueries({ queryKey: ['agents-list'] });
+      queryClient.invalidateQueries({ queryKey: ['routines-list'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-recent-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      toast.success('Quick routine started', `"${routine.name}" created and executed.`);
+      navigate(`/routines/${run.routine_id}/runs/${run.id}`);
+    },
+    onError: (error) => {
+      toast.error('Quick routine failed', error instanceof Error ? error.message : 'Could not start the sample routine.');
     },
   });
 
@@ -106,6 +152,17 @@ export function RoutinesListPage() {
           </div>
 
           <Button
+            variant="surface"
+            size="md"
+            onClick={() => quickRoutineMutation.mutate()}
+            isLoading={quickRoutineMutation.isPending}
+            className="shadow-2xs"
+          >
+            <Sparkles className="w-4 h-4 text-[#0f766e]" />
+            <span>Quick Test</span>
+          </Button>
+
+          <Button
             variant="primary"
             size="md"
             onClick={() => navigate('/routines/new')}
@@ -116,6 +173,18 @@ export function RoutinesListPage() {
           </Button>
         </div>
       </div>
+
+      {quickRoutineMutation.isPending && (
+        <div className="rounded-xl border border-[#99f6e4] bg-[#f0fdfa] p-4 flex items-start gap-3 text-sm text-[#0f766e] shadow-2xs">
+          <Loader2 className="w-5 h-5 animate-spin shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-[#115e59]">Quick Test routine is running</div>
+            <p className="mt-0.5 text-xs leading-relaxed">
+              Creating the test agent/routine if needed and waiting for the agent response. This may take 5-6 seconds.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Routines Table */}
       <div className="bg-white rounded-xl border border-[#e5e7eb] shadow-2xs overflow-hidden">
@@ -257,4 +326,34 @@ export function RoutinesListPage() {
       </div>
     </div>
   );
+}
+
+const routineStarterAgent: AgentCreateInput = {
+  name: 'Routine Test Agent',
+  objective: 'Run a quick scheduled-style research task and return a concise result.',
+  instructions:
+    'You are a routine testing agent. Use web_search for current information, summarize clearly, and keep the final answer short enough for a dashboard run output.',
+  model: 'google/gemini-2.5-flash',
+  temperature: 0.2,
+  tools: ['web_search', 'summarize_text', 'datetime'],
+  version: 'v1.0',
+  status: 'active',
+};
+
+const routineStarter = {
+  name: 'Quick Internship Research Test',
+  prompt: 'Find current software engineering internship opportunities and summarize the top 3 in a concise dashboard-friendly format.',
+  schedule: '0 9 * * *',
+  timezone: 'UTC',
+};
+
+function buildRoutineStarter(agent: Agent): RoutineCreateInput {
+  return {
+    agent_id: agent.id,
+    name: routineStarter.name,
+    prompt: routineStarter.prompt,
+    schedule: routineStarter.schedule,
+    timezone: routineStarter.timezone,
+    is_active: true,
+  };
 }

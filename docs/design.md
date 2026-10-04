@@ -2,7 +2,7 @@
 
 ## System Boundary
 
-This repository owns the backend. The frontend will be built separately and will consume these APIs.
+This repository owns the full MVP application: React frontend, FastAPI backend, PostgreSQL schema, AI engine, tools, routines, and deployment setup.
 
 Backend responsibilities:
 
@@ -16,11 +16,20 @@ Backend responsibilities:
 - routine run logs
 - external integrations
 
+Frontend responsibilities:
+
+- authenticated dashboard shell
+- agent create/edit/chat flows
+- Quick Run starter agents
+- routine list/create/edit/run flows
+- Quick Test routine bootstrap
+- settings and deployment-ready environment wiring
+
 ## High-Level Flow
 
 ```mermaid
 flowchart TD
-    A[External frontend] --> B[FastAPI API]
+    A[React frontend] --> B[FastAPI API]
     B --> C[Auth dependency]
     B --> D[Agent service]
     D --> E[Conversation history]
@@ -168,6 +177,7 @@ All routes use `/api/v1`.
 ## Frontend Screens To Support
 
 The frontend is out of scope for this repository, but APIs should support these screens:
+The frontend supports these MVP screens:
 
 - login/register
 - agents list
@@ -177,7 +187,8 @@ The frontend is out of scope for this repository, but APIs should support these 
 - create/edit routine
 - routine run details
 - dashboard summary
-- integration connection status
+- quick starter-agent run
+- quick routine test run
 
 ## Agent Loop Design
 
@@ -209,10 +220,19 @@ Detailed V2 architecture, diagrams, request flow, and implementation phases are 
 
 ### Internal MVP Tools
 
-- internship research tool
+- web search tool
 - date/time tool
-- save report tool
+- save/get memory tool
+- summarization tool
 - draft message tool
+
+Search tool outputs shown to users should expose only user-facing fields such as `tool`, `query`, `headline`, and result titles/snippets/URLs. Provider/debug fields should stay internal and should not appear in chat tool cards.
+
+## Frontend Runtime Helpers
+
+- Dashboard Quick Run can create a starter Research, Drafting, or Productivity agent when a workspace has no agents yet.
+- Routines Quick Test can create a routine test agent, create a sample routine, trigger it immediately, and open the routine run details page.
+- Agent telemetry should show real state only: objective, selected model, enabled tools, current execution state, and active tool calls. It should not show fake token counts, fake timestamps, fake cost, or fake provider traces.
 
 ### Integration Tools
 

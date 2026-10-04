@@ -6,8 +6,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://agenthub:agenthub@postgres:5432/agenthub
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001,http://localhost:5173
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://agenthub:agenthub@postgres:5432/agenthub}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:5173}
     ports:
       - "8000:8000"
     depends_on:
@@ -21,15 +21,15 @@ services:
     image: postgres:17-alpine
     container_name: agenthub-postgres
     environment:
-      POSTGRES_USER: agenthub
-      POSTGRES_PASSWORD: agenthub
-      POSTGRES_DB: agenthub
+      POSTGRES_USER: ${POSTGRES_USER:-agenthub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agenthub}
+      POSTGRES_DB: ${POSTGRES_DB:-agenthub}
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agenthub -d agenthub"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agenthub} -d ${POSTGRES_DB:-agenthub}"]
       interval: 5s
       timeout: 5s
       retries: 5

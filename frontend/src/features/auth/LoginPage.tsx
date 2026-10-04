@@ -29,8 +29,8 @@ export function LoginPage() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'elena@agenthub.dev',
-      password: 'password123',
+      email: '',
+      password: '',
     },
   });
 

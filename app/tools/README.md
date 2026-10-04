@@ -19,7 +19,7 @@ Agent run
 
 - `registry.py` - central registry of tool names, schemas, handlers, and safety metadata.
 - `context.py` - runtime context passed into tools, including database session, user id, and agent id.
-- `search_tool.py` - web search tool using Serper first and optional Tavily fallback.
+- `search_tool.py` - web search tool with provider details hidden from user-facing responses.
 - `datetime_tool.py` - current datetime helper.
 - `internal_tools.py` - internal safe tools such as text summarization and draft message creation.
 - `memory_tools.py` - long-term agent memory save/read tools backed by the database.

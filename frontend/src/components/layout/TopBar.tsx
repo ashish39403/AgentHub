@@ -1,5 +1,4 @@
 import React from 'react';
-import { useAuth } from '../../lib/auth-context';
 import { Button } from '../ui/Button';
 import { Search, Play, Menu } from 'lucide-react';
 
@@ -10,8 +9,6 @@ interface TopBarProps {
 }
 
 export function TopBar({ onQuickRunClick, onSearchClick, onMobileMenuToggle }: TopBarProps) {
-  const { user } = useAuth();
-
   return (
     <header className="fixed top-0 left-0 lg:left-64 right-0 h-14 bg-white/95 backdrop-blur-md border-b border-[#e5e7eb] z-30 px-4 lg:px-6 flex items-center justify-between">
       {/* Left side: Mobile Toggle + Breadcrumbs + Search input */}
@@ -46,7 +43,7 @@ export function TopBar({ onQuickRunClick, onSearchClick, onMobileMenuToggle }: T
         </button>
       </div>
 
-      {/* Right side: Docs, Quick Run, Avatar */}
+      {/* Right side: Docs and Quick Run */}
       <div className="flex items-center gap-2 sm:gap-3">
         <a
           href="#docs"
@@ -67,13 +64,6 @@ export function TopBar({ onQuickRunClick, onSearchClick, onMobileMenuToggle }: T
           <Play className="w-3.5 h-3.5 fill-current" />
           <span>Quick Run</span>
         </Button>
-
-        <img
-          src={user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
-          alt="Profile"
-          className="w-7 h-7 rounded-full object-cover border border-[#e5e7eb] ml-0.5"
-          referrerPolicy="no-referrer"
-        />
       </div>
     </header>
   );

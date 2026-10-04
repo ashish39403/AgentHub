@@ -18,6 +18,7 @@ V2 does not mean the product becomes a general AI toy. The product direction sta
 - Produce a final answer grounded in tool output.
 - Save user messages, assistant messages, tool messages, tool action logs, and routine run outputs.
 - Block unsafe external actions unless the user has explicitly configured or confirmed them.
+- Return user-facing tool summaries without exposing internal provider names, API routing, keys, debug fields, or fallback details.
 
 ## V2 Tech Stack
 
@@ -161,10 +162,11 @@ sequenceDiagram
    - user owns the resource
    - action is safe or confirmation-gated
 9. Tool executes and returns structured JSON.
-10. Tool result is logged in `tool_action_logs`.
-11. Engine sends tool result back to the LLM for final synthesis.
-12. Final assistant answer is saved.
-13. Dashboard and conversation APIs can read saved outputs.
+10. Tool output is normalized into a safe public shape for chat and dashboard display.
+11. Tool result is logged in `tool_action_logs`.
+12. Engine sends tool result back to the LLM for final synthesis.
+13. Final assistant answer is saved.
+14. Dashboard and conversation APIs can read saved outputs.
 
 ## Agent State Model
 
@@ -253,6 +255,7 @@ Rules:
 - Read-only tools can run automatically.
 - Draft tools can prepare content automatically.
 - External send/delete/apply actions require confirmation or explicit safe configuration.
+- Search tools should expose `web_search`, `query`, result titles, snippets, and URLs to the frontend. Provider names and fallback internals stay hidden.
 
 ## Prompting Strategy
 
@@ -300,6 +303,11 @@ Observability records:
 - error message without secrets
 - final output saved for dashboard use
 
+Frontend telemetry rule:
+
+- Show only real execution state, selected model, enabled tools, current streaming/tool activity, and saved output metadata.
+- Do not show fake timestamps, fake token counts, fake costs, or provider/debug traces.
+
 ## Implementation Phases
 
 ### Phase 1: V2 Design And Docs
@@ -342,6 +350,8 @@ Observability records:
 - Let users delete/clear a conversation from the chat screen.
 - Show tool-call cards first, then progressively render the assistant response.
 - Refresh agent/chat query state after edits so the next run uses updated instructions, model, and tools.
+- Provide Quick Run starter agents for empty workspaces.
+- Provide a Quick Test routine flow that creates a sample routine and runs it immediately.
 
 ## Interview Explanation
 

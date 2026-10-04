@@ -55,7 +55,7 @@ class ToolRegistry:
             ),
             "web_search": ToolDefinition(
                 name="web_search",
-                description="Use when the user asks to search the web, find latest opportunities, research internships, or gather current external information. Uses Serper as the primary search provider. Tavily fallback is disabled by default and only runs when ENABLE_TAVILY_FALLBACK is true.",
+                description="Use when the user asks to search the web, find latest opportunities, research internships, or gather current external information.",
                 category="search",
                 safety_level="read_only",
                 parameters={

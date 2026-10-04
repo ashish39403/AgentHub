@@ -389,7 +389,7 @@ export function AgentChatPage() {
                 {/* Routine Status Chip */}
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#f0fdfa] border border-[#99f6e4] text-[#0f766e] text-[11px] font-medium shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#0f766e] animate-pulse" />
-                  <span>Executing routine</span>
+                  <span>{isStreaming ? 'Responding' : 'Ready'}</span>
                 </span>
               </div>
 
@@ -689,26 +689,20 @@ export function AgentChatPage() {
                   Active Objective
                 </span>
                 <div className="p-2.5 rounded-lg bg-white border border-[#e5e7eb] text-xs text-[#111827] leading-relaxed shadow-2xs">
-                  "{agent?.objective || 'Find AI internships and draft weekly digest'}"
+                  "{agent?.objective || 'No objective configured yet.'}"
                 </div>
               </div>
 
-              {/* Context Window Gauge */}
+              {/* Session Context */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6b7280]">
-                    Context Window
+                    Session Context
                   </span>
-                  <span className="font-mono text-[11px] text-[#0f766e] font-medium">
-                    3.2%
-                  </span>
+                  <span className="font-mono text-[11px] text-[#0f766e] font-medium">{messages.length} msgs</span>
                 </div>
-                <div className="w-full h-1.5 bg-[#e5e7eb] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#0f766e] rounded-full w-[3.2%]" />
-                </div>
-                <div className="flex justify-between mt-1 font-mono text-[10px] text-[#6b7280]">
-                  <span>4,120 tokens</span>
-                  <span>128k max</span>
+                <div className="p-2.5 rounded-lg bg-white border border-[#e5e7eb] text-xs text-[#4b5563] leading-relaxed shadow-2xs">
+                  {activeConvId ? 'Conversation context is loaded from saved messages.' : 'Start a chat to create conversation context.'}
                 </div>
               </div>
 
@@ -718,7 +712,7 @@ export function AgentChatPage() {
                   Tools in Execution Scope
                 </span>
                 <div className="flex flex-wrap gap-1">
-                  {(agent?.tools || ['web_search', 'gmail_summary', 'save_memory', 'draft_message']).map(
+                  {(agent?.tools || []).length > 0 ? agent?.tools.map(
                     (tool) => (
                       <span
                         key={tool}
@@ -727,52 +721,48 @@ export function AgentChatPage() {
                         {tool}
                       </span>
                     )
+                  ) : (
+                    <span className="text-xs text-[#6b7280]">No tools enabled.</span>
                   )}
                 </div>
               </div>
 
-              {/* Execution Stream Live Logs */}
+              {/* Execution Stream */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6b7280]">
                     Execution Stream
                   </span>
-                  <span className="font-mono text-[10px] text-[#16a34a] flex items-center gap-1 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a]" />
-                    LIVE
+                  <span className={`font-mono text-[10px] flex items-center gap-1 font-medium ${isStreaming ? 'text-[#16a34a]' : 'text-[#6b7280]'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isStreaming ? 'bg-[#16a34a]' : 'bg-[#9ca3af]'}`} />
+                    {isStreaming ? 'LIVE' : 'IDLE'}
                   </span>
                 </div>
                 <div className="space-y-1.5 font-mono text-[10px] bg-white p-2.5 rounded-lg border border-[#e5e7eb] shadow-2xs">
-                  <div className="flex items-start gap-2">
-                    <span className="text-[#6b7280]">09:14:02</span>
-                    <span className="text-[#4b5563] truncate">Task dispatched</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[#6b7280]">09:14:04</span>
-                    <span className="text-[#0f766e] truncate">Calling Lever/GH scrapers</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[#6b7280]">09:14:06</span>
-                    <span className="text-[#4b5563] truncate">14 nodes hydrated</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[#6b7280]">09:14:07</span>
-                    <span className="text-[#4b5563] truncate">6 passed filters</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[#6b7280]">09:14:08</span>
-                    <span className="text-[#0d9488] font-medium animate-pulse truncate">
-                      Drafting digest payload
-                    </span>
-                  </div>
+                  {isStreaming ? (
+                    <>
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6b7280]">now</span>
+                        <span className="text-[#4b5563] truncate">Assistant response in progress</span>
+                      </div>
+                      {streamingTools.map((tool) => (
+                        <div key={tool.id} className="flex items-start gap-2">
+                          <span className="text-[#6b7280]">tool</span>
+                          <span className="text-[#0f766e] truncate">{formatToolName(tool.tool_name)} {tool.status}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="text-[#6b7280]">No active execution.</div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Metrics Footer */}
             <div className="p-3 border-t border-[#e5e7eb] bg-[#f9fafb] flex items-center justify-between font-mono text-[10px] text-[#6b7280]">
-              <span>Latency: 284ms</span>
-              <span>Cost: ~$0.014</span>
+              <span>{agent?.model || 'No model selected'}</span>
+              <span>{isStreaming ? 'Running' : 'Ready'}</span>
             </div>
           </div>
         )}
@@ -833,10 +823,8 @@ function formatToolOutput(output: Record<string, unknown> | string): string {
   }
 
   const status = typeof output.status === 'string' ? output.status : 'completed';
-  const provider = typeof output.primary_provider === 'string' ? ` via ${output.primary_provider}` : '';
-  const tavily = output.tavily_used === true ? ' + Tavily fallback' : '';
   const headline = typeof output.headline === 'string' ? ` - ${output.headline}` : '';
-  return `${status}${provider}${tavily}${headline}`;
+  return `${status}${headline}`;
 }
 
 function formatToolName(name: string): string {
@@ -861,7 +849,7 @@ function formatToolInput(input: Record<string, unknown>): string {
 function formatToolSummary(output: Record<string, unknown> | string | undefined): string {
   if (!output) return 'completed';
   if (typeof output === 'string') return 'completed';
-  if (typeof output.primary_provider === 'string') return `via ${output.primary_provider}`;
+  if (typeof output.query === 'string') return `query: ${output.query}`;
   if (typeof output.status === 'string') return output.status;
   return 'completed';
 }

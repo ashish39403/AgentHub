@@ -15,17 +15,11 @@ async def web_search(arguments: dict) -> dict:
         ranked_results = [search_configuration_notice(query)]
         return {
             "status": "not_configured",
+            "tool": "web_search",
             "query": query,
-            "rewritten_query": None,
-            "primary_provider": "not_configured",
-            "primary_result_count": 0,
-            "primary_results_enough": False,
-            "tavily_used": False,
-            "fallback_used": False,
-            "fallback_enabled": settings.enable_tavily_fallback,
-            "live_search_used": False,
+            "result_count": 0,
             "headline": build_headline(ranked_results, query),
-            "results": ranked_results,
+            "results": public_search_results(ranked_results),
             "next_step": next_step_for_search(
                 ranked_results,
                 primary_results_enough=False,
@@ -46,17 +40,12 @@ async def web_search(arguments: dict) -> dict:
     ranked_results = rank_results(results)[:limit]
     return {
         "status": search_status(ranked_results),
+        "tool": "web_search",
         "query": query,
         "rewritten_query": rewritten_query,
-        "primary_provider": primary_provider_name(),
-        "primary_result_count": len(primary_results),
-        "primary_results_enough": primary_enough,
-        "tavily_used": bool(tavily_results),
-        "fallback_used": bool(tavily_results),
-        "fallback_enabled": settings.enable_tavily_fallback,
-        "live_search_used": any(result.get("source") in {"serper", "tavily"} for result in ranked_results),
+        "result_count": len(ranked_results),
         "headline": build_headline(ranked_results, query),
-        "results": ranked_results,
+        "results": public_search_results(ranked_results),
         "next_step": next_step_for_search(
             ranked_results,
             primary_results_enough=primary_enough,
@@ -156,6 +145,17 @@ def rank_results(results: list[dict]) -> list[dict]:
     return sorted(deduped.values(), key=lambda result: result.get("score", 0), reverse=True)
 
 
+def public_search_results(results: list[dict]) -> list[dict]:
+    return [
+        {
+            "title": result.get("title"),
+            "url": result.get("url"),
+            "snippet": result.get("snippet"),
+        }
+        for result in results
+    ]
+
+
 def build_headline(results: list[dict], query: str) -> str:
     if not results:
         return f"No strong results found for {query}."
@@ -166,9 +166,9 @@ def build_headline(results: list[dict], query: str) -> str:
 
 def next_step_for_search(results: list[dict], *, primary_results_enough: bool, tavily_used: bool) -> str:
     if results and results[0].get("source") == "local_configuration_notice":
-        return "Add SERPER_API_KEY to .env, then restart the backend. Tavily fallback is disabled by default."
+        return "Configure the web search API key in .env, then restart the backend."
     if not primary_results_enough and not tavily_used:
-        return "Primary search ran but results were weak. Tavily was not called because ENABLE_TAVILY_FALLBACK is false, missing, or TAVILY_API_KEY is not set."
+        return "Web search ran but returned weak results. Try a more specific query."
     return "Review the ranked results and summarize the most relevant findings for the user."
 
 
@@ -184,7 +184,7 @@ def search_configuration_notice(query: str) -> dict:
     return {
         "title": f"Primary search is not configured for: {query}",
         "url": None,
-        "snippet": "Set SERPER_API_KEY in .env to enable live web search. Tavily fallback is disabled by default, so it was not called.",
+        "snippet": "Set the web search API key in .env to enable live web search.",
         "source": "local_configuration_notice",
         "score": 10,
     }

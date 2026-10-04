@@ -1,194 +1,215 @@
-<div align="center">
-
 # AgentHub
 
-**Create AI agents that use tools, run scheduled routines, and log every action.**
+AgentHub is a full-stack AI automation dashboard where users can create custom agents, chat with them, enable tools, schedule routines, and view saved activity from a dashboard.
 
-[Website](https://agent-hub-webiste.vercel.app/) · [API Docs](#api-overview) · [Getting Started](#getting-started) · [Architecture](#architecture)
-
-![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
-
-</div>
-
----
-
-## Overview
-
-AgentHub is a backend platform for building autonomous AI agents. Unlike a chatbot that only replies, an AgentHub agent runs a **tool-calling loop**: it reasons, calls tools, reads the results, and continues until the task is complete. Every run and tool action is stored, so users can see exactly what their agents did.
-
-This repository contains the **backend API**. The web frontend lives in a separate repository and consumes the REST API described below.
-
-## Features
-
-- **Secure authentication**: register, login, token refresh, logout, current user
-- **Custom agents**: user-scoped CRUD with per-agent instructions and objectives
-- **Conversations**: persistent message history and agent runs
-- **Custom agent loop**: written from scratch (no agent framework), with max-iteration safety
-- **Tool catalog**: 10 tools, enabled or disabled per agent
-- **Routines**: manual and scheduled execution with detailed run logs
-- **Gmail summaries**: read-only summary tool with controlled scheduled actions
-- **Dashboard APIs**: summary, recent runs, recent activity, action items
-- **Flexible LLM layer**: deterministic mock for local dev, OpenAI-compatible client for real models
-- **Consistent error format** across every endpoint
+The MVP focuses on an engineering student use case: internship research, Gmail-style summaries, memory, web search, scheduled routines, and safe draft/action preparation.
 
 ## Tech Stack
 
-| Layer | Technology |
+| Layer | Stack |
 |---|---|
-| API | Python, FastAPI (async) |
-| Database | PostgreSQL, SQLAlchemy 2.0 (async), Alembic |
-| Validation | Pydantic v2 |
-| LLM | OpenAI SDK with AICredits or any OpenAI-compatible provider |
-| Tooling | uv, pytest |
-| Deployment | Docker, Docker Compose |
+| Frontend | React, Vite, TypeScript, TanStack Query |
+| Backend | Python, FastAPI async |
+| Database | PostgreSQL, SQLAlchemy 2.0 async, Alembic |
+| AI | OpenAI SDK with OpenAI-compatible/AICredits models, LangGraph orchestration |
+| Tools | Web search, datetime, summarization, memory, Gmail summary, draft/action tools |
+| Deployment | Docker, Docker Compose, AWS EC2, AWS RDS, S3, CloudFront |
+
+## Features
+
+- User registration, login, refresh tokens, and current-user auth
+- User-scoped agent CRUD
+- Per-agent model selection and tool configuration
+- Persistent conversations and messages
+- AI agent execution with tool routing, guardrails, and action safety checks
+- Routine creation and manual/scheduled execution
+- Dashboard summary, recent activity, routine runs, and action items
+- Frontend pages for dashboard, agents, chat, routines, and settings
+- Quick Run starter agents and Quick Test routine bootstrap for first-time testing
+- Dockerized backend deployment
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    A[Client] --> B[FastAPI API]
-    B --> C[Auth dependency]
-    B --> D[Agent service]
-    D --> E[Conversation history]
-    D --> F[LLM client]
-    F --> G{Tool call?}
-    G -->|yes| H[Tool registry]
-    H --> I[Internal tools / integrations]
-    I --> D
-    G -->|no| J[Final response]
-    D --> K[(PostgreSQL)]
-    J --> B
+```text
+React Frontend
+  -> FastAPI Backend
+  -> AI Engine
+  -> Tool Registry
+  -> PostgreSQL
 ```
 
-Scheduled routines use the same agent service: the scheduler loads an active routine, runs the agent with the routine prompt, and stores the result as a run record.
+Deployment target:
 
-A full diagram is available in [`docs/architecture.svg`](docs/architecture.svg).
+```text
+User
+  -> CloudFront
+  -> S3 React build
 
-## Getting Started
+React app
+  -> EC2 Docker FastAPI backend
+  -> RDS PostgreSQL
+```
 
-### Prerequisites
+Detailed docs:
 
-- Python (version specified in `pyproject.toml`)
-- [uv](https://docs.astral.sh/uv/)
-- Docker and Docker Compose
+- [System design](docs/design.md)
+- [Architecture SVG](docs/architecture.svg)
+- [AI Engine V2](docs/ai-engine-v2.md)
 
-### Run locally
+## Local Setup
+
+### 1. Backend environment
 
 ```bash
-# Install dependencies
-uv sync
-
-# Create your environment file
-cp .env.example .env          # Windows (cmd): copy .env.example .env
-
-# Start PostgreSQL
-docker compose up -d postgres
-
-# Apply migrations
-uv run alembic upgrade head
-
-# Start the API
-uv run uvicorn app.main:app --reload
+cp .env.example .env
 ```
 
-Check that it works:
-
-```bash
-curl http://localhost:8000/api/v1/health
-```
-
-Interactive docs are served at `http://localhost:8000/docs`.
-
-### Run with Docker
-
-```bash
-docker compose up --build
-```
-
-### Run tests
-
-```bash
-uv run pytest
-```
-
-## Configuration
-
-Copy `.env.example` to `.env`. Never commit your `.env` file.
-
-**Local database defaults** (development only, use strong secrets in any deployment):
-
-| Setting | Value |
-|---|---|
-| Host | `127.0.0.1` |
-| Port | `5433` |
-| Database | `agenthub` |
-| User / Password | `agenthub` / `agenthub` |
-
-**LLM provider.** The default is a deterministic mock, so the app runs with no API key:
+Set at least:
 
 ```env
+APP_ENV=development
+APP_NAME=AgentHub
+API_V1_PREFIX=/api/v1
+CORS_ORIGINS=http://localhost:3000
+DATABASE_URL=postgresql+asyncpg://agenthub:agenthub@localhost:5433/agenthub
+JWT_SECRET_KEY=change-this-local-secret
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
 LLM_PROVIDER=mock
+AGENT_MAX_ITERATIONS=4
 ```
 
-For real models:
+For real LLM calls:
 
 ```env
 LLM_PROVIDER=aicredits
-AICREDITS_BASE_URL=<provider-base-url>
-AICREDITS_API_KEY=<your-secret-key>
+AICREDITS_BASE_URL=<openai-compatible-base-url>
+AICREDITS_API_KEY=<your-key>
+SERPER_API_KEY=<your-serper-key>
 ```
 
-Model roles are set with `LLM_MODEL_DEFAULT`, `LLM_MODEL_FAST`, `LLM_MODEL_SMART`, `LLM_MODEL_REASONING`, `LLM_MODEL_CHEAP`, and `LLM_MODEL_EXPERIMENTAL`.
+### 2. Start database
 
-## API Overview
-
-Base path: `/api/v1`. Protected routes need `Authorization: Bearer <access_token>`.
-
-| Group | Endpoints |
-|---|---|
-| Health | `GET /health` |
-| Auth | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me` |
-| Agents | `POST /agents` · `GET /agents` · `GET /agents/{id}` · `PATCH /agents/{id}` · `DELETE /agents/{id}` |
-| Conversations | `POST /agents/{id}/conversations` · `GET /agents/{id}/conversations` · `GET /conversations/{id}` · `POST /conversations/{id}/messages` · `POST /conversations/{id}/runs` |
-| Tools | `GET /tools` · `GET /agents/{id}/tools` · `PUT /agents/{id}/tools` |
-| Routines | `POST /routines` · `GET /routines` · `GET /routines/{id}` · `PATCH /routines/{id}` · `DELETE /routines/{id}` · `POST /routines/{id}/run` · `GET /routines/{id}/runs` |
-| Integrations | `GET /integrations/gmail/status` |
-| Dashboard | `GET /dashboard/summary` · `GET /dashboard/recent-runs` · `GET /dashboard/recent-activity` · `GET /dashboard/action-items` |
-
-Every error follows one shape:
-
-```json
-{
-  "error": {
-    "code": "string_code",
-    "message": "Human readable message",
-    "details": {}
-  }
-}
+```bash
+docker compose up -d postgres
 ```
 
-## Security
+Local Postgres connection:
 
-- Every query is scoped to the authenticated user
-- Passwords are hashed, access tokens are short-lived, refresh tokens are revocable
-- External integration tokens are never returned to clients
-- Secrets are never logged
-- Risky tool actions require explicit configuration
+```text
+Host: localhost
+Port: 5433
+Database: agenthub
+User: agenthub
+Password: agenthub
+```
 
-## Documentation
+### 3. Run migrations
 
-- [Milestone plan](docs/milestones.md)
-- [Production notes](docs/production.md)
-- [Demo script](docs/demo-script.md)
+```bash
+uv sync
+uv run alembic upgrade head
+```
 
-## Roadmap
+### 4. Start backend
 
-- More integrations beyond Gmail
-- Confirmation-gated actions such as sending email or Slack messages
+```bash
+uv run uvicorn app.main:app --reload
+```
 
-## License
+Backend health:
 
-Add a license file (for example MIT) and reference it here.
+```text
+http://localhost:8000/api/v1/health
+```
+
+API docs:
+
+```text
+http://localhost:8000/docs
+```
+
+### 5. Start frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend:
+
+```text
+http://localhost:3000
+```
+
+## Docker Run
+
+Run backend and Postgres together:
+
+```bash
+docker compose up -d --build
+```
+
+View logs:
+
+```bash
+docker compose logs -f api
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+## API Groups
+
+Base path:
+
+```text
+/api/v1
+```
+
+Main groups:
+
+- `auth`: register, login, refresh, logout, current user
+- `agents`: create, list, read, update, delete agents
+- `conversations`: create chats, read messages, run agents, delete chats
+- `tools`: list available tools and update agent tools
+- `routines`: create, update, run, and inspect scheduled routines
+- `dashboard`: summary, recent runs, recent activity, action items
+- `health`: backend health check
+
+## Simple AWS Deployment
+
+Production-ready but simple deployment shape:
+
+```text
+Frontend: S3 + CloudFront
+Backend: EC2 + Docker
+Database: RDS PostgreSQL
+```
+
+Deployment flow:
+
+```text
+1. Create RDS PostgreSQL.
+2. Create EC2 instance.
+3. Install Docker and Git on EC2.
+4. Clone this repo on EC2.
+5. Set backend .env with RDS DATABASE_URL.
+6. Run docker compose up -d --build.
+7. Build frontend with VITE_API_BASE_URL pointing to backend.
+8. Upload frontend dist to S3.
+9. Serve S3 through CloudFront.
+10. Add CloudFront URL to backend CORS_ORIGINS.
+```
+
+## Repository Notes
+
+- `.env` and secrets are not committed.
+- Extra planning documents are intentionally excluded from the public repo.
+- Public docs are limited to design, architecture, and AI engine explanation.
+- Risky tools are confirmation-gated or draft-only in the MVP.

@@ -1,4 +1,4 @@
-# Python
+# Python caches
 __pycache__/
 *.py[cod]
 *.pyo
@@ -18,11 +18,15 @@ env/
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.crt
 
-# Local app files
+# Local runtime files
 *.log
 logs/
 tmp/
+uploads/
 
 # Build artifacts
 build/
@@ -33,6 +37,9 @@ dist/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
 # IDE/editor
 .idea/
@@ -43,4 +50,7 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
-project-notes
+
+# Local notes and generated artifacts
+project-notes/
+cicd/

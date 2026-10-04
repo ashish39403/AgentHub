@@ -5,7 +5,7 @@ import { ApiError, api } from '../../lib/api-client';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { Agent } from '../../types';
+import { Agent, Routine } from '../../types';
 import {
   Cpu,
   Search,
@@ -50,17 +50,22 @@ export function AgentsListPage() {
     mutationFn: (id: string) => api.deleteAgent(id),
     onMutate: async (deletedAgentId) => {
       await queryClient.cancelQueries({ queryKey: ['agents-list'] });
+      await queryClient.cancelQueries({ queryKey: ['routines-list'] });
       const previousAgents = queryClient.getQueryData<Agent[]>(['agents-list']);
+      const previousRoutines = queryClient.getQueryData<Routine[]>(['routines-list']);
 
       queryClient.setQueryData<Agent[]>(['agents-list'], (old) =>
-        old ? old.filter((agent) => agent.id !== deletedAgentId) : old
+        (old || agents || []).filter((agent) => agent.id !== deletedAgentId)
+      );
+      queryClient.setQueryData<Routine[]>(['routines-list'], (old) =>
+        (old || routines || []).filter((routine) => routine.agent_id !== deletedAgentId)
       );
       queryClient.removeQueries({ queryKey: ['agent-detail', deletedAgentId] });
       queryClient.removeQueries({ queryKey: ['agent-chat-detail', deletedAgentId] });
       queryClient.removeQueries({ queryKey: ['agent-conversations', deletedAgentId] });
       setActiveMenuId(null);
 
-      return { previousAgents };
+      return { previousAgents, previousRoutines };
     },
     onSuccess: () => {
       toast.success('Agent removed', 'Agent was successfully deleted.');
@@ -72,6 +77,9 @@ export function AgentsListPage() {
       }
       if (context?.previousAgents) {
         queryClient.setQueryData(['agents-list'], context.previousAgents);
+      }
+      if (context?.previousRoutines) {
+        queryClient.setQueryData(['routines-list'], context.previousRoutines);
       }
       toast.error('Delete failed', 'Could not delete this agent.');
     },
