@@ -1,0 +1,151 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agenthub-ec2-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and run with Docker Compose
+    runs-on: self-hosted
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Docker Compose
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Validate required secrets
+        env:
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          AICREDITS_BASE_URL: ${{ secrets.AICREDITS_BASE_URL }}
+          AICREDITS_API_KEY: ${{ secrets.AICREDITS_API_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+        run: |
+          missing=0
+
+          for name in CORS_ORIGINS DATABASE_URL JWT_SECRET_KEY AICREDITS_BASE_URL AICREDITS_API_KEY SERPER_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: ${name}"
+              missing=1
+            fi
+          done
+
+          exit "${missing}"
+
+      - name: Create production env file
+        env:
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          AICREDITS_BASE_URL: ${{ secrets.AICREDITS_BASE_URL }}
+          AICREDITS_API_KEY: ${{ secrets.AICREDITS_API_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          ENABLE_TAVILY_FALLBACK: ${{ secrets.ENABLE_TAVILY_FALLBACK }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          COMPOSIO_BASE_URL: ${{ secrets.COMPOSIO_BASE_URL }}
+          COMPOSIO_CALLBACK_URL: ${{ secrets.COMPOSIO_CALLBACK_URL }}
+          COMPOSIO_GMAIL_AUTH_CONFIG_ID: ${{ secrets.COMPOSIO_GMAIL_AUTH_CONFIG_ID }}
+          COMPOSIO_NOTION_AUTH_CONFIG_ID: ${{ secrets.COMPOSIO_NOTION_AUTH_CONFIG_ID }}
+          COMPOSIO_GITHUB_AUTH_CONFIG_ID: ${{ secrets.COMPOSIO_GITHUB_AUTH_CONFIG_ID }}
+          COMPOSIO_GMAIL_FETCH_TOOL_SLUG: ${{ secrets.COMPOSIO_GMAIL_FETCH_TOOL_SLUG }}
+          COMPOSIO_GITHUB_SEARCH_TOOL_SLUG: ${{ secrets.COMPOSIO_GITHUB_SEARCH_TOOL_SLUG }}
+          COMPOSIO_NOTION_CREATE_PAGE_TOOL_SLUG: ${{ secrets.COMPOSIO_NOTION_CREATE_PAGE_TOOL_SLUG }}
+        run: |
+          write_if_set() {
+            if [ -n "$2" ]; then
+              printf '%s=%s\n' "$1" "$2" >> .env
+            fi
+          }
+
+          cat > .env <<EOF
+          APP_ENV=production
+          APP_NAME=AgentHub
+          API_V1_PREFIX=/api/v1
+          CORS_ORIGINS=${CORS_ORIGINS}
+
+          DATABASE_URL=${DATABASE_URL}
+          POSTGRES_USER=${POSTGRES_USER:-agenthub}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-agenthub}
+          POSTGRES_DB=${POSTGRES_DB:-agenthub}
+
+          JWT_SECRET_KEY=${JWT_SECRET_KEY}
+          JWT_ALGORITHM=HS256
+          JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+          JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
+
+          LLM_PROVIDER=aicredits
+          AGENT_MAX_ITERATIONS=4
+          LLM_MODEL_DEFAULT=google/gemini-2.5-flash
+          LLM_MODEL_FAST=openai/gpt-3.5-turbo-0613
+          LLM_MODEL_SMART=deepseek/deepseek-v4-pro
+          LLM_MODEL_REASONING=gpt-5-mini
+          LLM_MODEL_CHEAP=google/gemini-2.5-flash
+          LLM_MODEL_EXPERIMENTAL=nvidia/nemotron-3-ultra-550b-a55b
+
+          AICREDITS_BASE_URL=${AICREDITS_BASE_URL}
+          AICREDITS_API_KEY=${AICREDITS_API_KEY}
+
+          SERPER_API_KEY=${SERPER_API_KEY}
+          ENABLE_TAVILY_FALLBACK=${ENABLE_TAVILY_FALLBACK:-false}
+          EOF
+
+          write_if_set TAVILY_API_KEY "${TAVILY_API_KEY}"
+          write_if_set COMPOSIO_API_KEY "${COMPOSIO_API_KEY}"
+          write_if_set COMPOSIO_BASE_URL "${COMPOSIO_BASE_URL}"
+          write_if_set COMPOSIO_CALLBACK_URL "${COMPOSIO_CALLBACK_URL}"
+          write_if_set COMPOSIO_GMAIL_AUTH_CONFIG_ID "${COMPOSIO_GMAIL_AUTH_CONFIG_ID}"
+          write_if_set COMPOSIO_NOTION_AUTH_CONFIG_ID "${COMPOSIO_NOTION_AUTH_CONFIG_ID}"
+          write_if_set COMPOSIO_GITHUB_AUTH_CONFIG_ID "${COMPOSIO_GITHUB_AUTH_CONFIG_ID}"
+          write_if_set COMPOSIO_GMAIL_FETCH_TOOL_SLUG "${COMPOSIO_GMAIL_FETCH_TOOL_SLUG}"
+          write_if_set COMPOSIO_GITHUB_SEARCH_TOOL_SLUG "${COMPOSIO_GITHUB_SEARCH_TOOL_SLUG}"
+          write_if_set COMPOSIO_NOTION_CREATE_PAGE_TOOL_SLUG "${COMPOSIO_NOTION_CREATE_PAGE_TOOL_SLUG}"
+
+          chmod 600 .env
+
+      - name: Deploy backend
+        run: |
+          docker compose up -d --build --remove-orphans
+          docker compose ps
+
+      - name: Health check
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health; then
+              echo "AgentHub API is healthy."
+              exit 0
+            fi
+
+            echo "Waiting for API health check... attempt ${attempt}/30"
+            sleep 3
+          done
+
+          docker compose logs api --tail=120
+          exit 1
+
+      - name: Clean old Docker images
+        if: always()
+        run: docker image prune -f
